@@ -18,6 +18,11 @@ from sklearn.cluster import KMeans
 import cplex
 from mosek.fusion import Domain, Expr, Model, ObjectiveSense
 
+# *********** COMEX IMPORTS **************
+from kmodes.kmodes import KModes
+import json
+import ast
+
 warnings.filterwarnings("error")
 
 
@@ -1071,66 +1076,32 @@ class CutSolverK(object):
                         df_pop.append(rank_list[agg_idx])  
                     nb_violated += 1
             
-            # SAVE POPULATION FOR ROUND 1
-            # if cut_round == 1:
-            #     df_pop = pd.DataFrame(df_pop)
-            #     File_name = r'C:\Users\mexis\OneDrive\Υπολογιστής\SDPCutSel-via-NN-master\Results\Kmeans_feasibility_' + str(n_clusters) + '_clusters_1stRoundPopulation.csv'
-            #     df_pop.to_csv(File_name, header='column_names',index=False)
-            
-            
 # *************
         rank_list = df_pop[:100] # Return the first 100 lines just to check...
+        ''' KMODES '''
+        df = pd.DataFrame(df_pop)
 
-        return rank_list
+        # use apply() with a lambda function to unpack each list into three separate values
+        df[['A', 'B', 'C']] = df[1].apply(lambda x: pd.Series(x))
 
+        # Transform A, B, C to object columns (categorical)
+        df[['A', 'B', 'C']] = df[['A', 'B', 'C']].astype(object)
 
-'''
-            pop_kmeans=np.asarray(population) # The sparse matrix 
+        # KModes for Categorical Variables
+        N_CLUSTERS = 20
+        kmode = KModes(n_clusters=N_CLUSTERS, init='Huang', 
+                    n_init=5)
 
-            kmeans=KMeans(n_clusters= n_clusters ).fit(pop_kmeans)
-            labels=kmeans.labels_        
-            inertia=kmeans.inertia_
-            print('the inertia is', inertia)         
-            count_dupl=dict(Counter(labels))
-            #print(count_dupl)
+        clusters = kmode.fit_predict(df[['A','B','C']])
+        df['kmodes'] = clusters
 
+        SELECTED_CUTS = [df[df['kmodes'] == cls].sort_values(by=2, ascending=False).index[:5].values for cls in range(N_CLUSTERS)]
+        SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
 
-            rank_list_new=[] 
-            if n_clusters>=100:
-                for cluster in range(n_clusters):
-                    rank_list_cluster=[] #rank lits for cluster's elements
-                    for element in range(nb_violated):
-                        if labels[element]==cluster:
-                            hold=aggidx_viol[element]
-                            rank_list_cluster.append(rank_list[hold])
-                    amb_aggidx= max(rank_list_cluster, key=lambda x: x[2])[0] #agg_idx of the ambassador element of a cluster
-                    # print(amb_aggidx)
-                    rank_list_new.append(rank_list[amb_aggidx])
-                    rank_list_new.sort(key=itemgetter(2), reverse=True)
- 
- 
-            if n_clusters<100:
-                for cluster in range(n_clusters):
-                    rank_list_cluster=[] #rank lits for cluster's elements
-                    for element in range(nb_violated):
-                        if labels[element]==cluster:
-                            hold=aggidx_viol[element]
-                            rank_list_cluster.append(rank_list[hold])
-                    rank_list_cluster.sort(key=itemgetter(2), reverse=True)
-                    rank_list_new.extend(rank_list_cluster[0:n_amb])                    
+        df.drop(columns=['A','B','C','kmodes'], inplace=True)
+        rank_list = df.loc[SELECTED_CUTS]
+        # rank_list[0] = SELECTED_CUTS
 
-            if len(rank_list_new)>100 :
-              rank_list=rank_list_new[0:100]                 
-            else:
-              rank_list=rank_list_new
+        print(list(rank_list.head(2).values))
 
-
-            #          rank_list[agg_idx] = (set_inds, -eigval,curr_pt, Xarr_inds, dim_act)#m add curr_pt #I want to replace this
-            #         nb_violated += 1
-            #     else:
-            #         rank_list[agg_idx] = (0, 0)
-            # rank_list.sort(key=itemgetter(1), reverse=True)
-            # rank_list = rank_list[0:nb_violated]
-
-        return rank_list
-'''
+        return list(rank_list)
