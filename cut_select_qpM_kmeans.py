@@ -19,11 +19,15 @@ import cplex
 from mosek.fusion import Domain, Expr, Model, ObjectiveSense
 
 # *********** COMEX IMPORTS **************
+from keras.layers import Dense, Input
+from keras.models import Model, Sequential
+
 from kmodes.kmodes import KModes
 import json
 import ast
 
 warnings.filterwarnings("error")
+warnings.simplefilter("ignore", DeprecationWarning)
 
 
 
@@ -1078,29 +1082,86 @@ class CutSolverK(object):
             
 # *************
         '''KMODES'''
+        def kmodes(df_pop):
+            df = pd.DataFrame(df_pop)
+            # use apply() with a lambda function to unpack each list into three separate values
+            df[['A', 'B', 'C']] = df[1].apply(lambda x: pd.Series(x))
+
+            # Transform A, B, C to object columns (categorical)
+            df[['A', 'B', 'C']] = df[['A', 'B', 'C']].astype(object)
+
+            # KModes for Categorical Variables
+            N_CLUSTERS = 20
+            kmode = KModes(n_clusters=N_CLUSTERS, init='Huang', 
+                        n_init=5)
+
+            clusters = kmode.fit_predict(df[['A','B','C']])
+            df['kmodes'] = clusters
+
+            SELECTED_CUTS = [df[df['kmodes'] == cls].sort_values(by=2, ascending=False).index[:5].values for cls in range(N_CLUSTERS)]
+            SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+
+            # get the elements of the initial list based on the index
+            # cuts_idx = df[:100].index # get index of selected cuts
+            cuts_idx = SELECTED_CUTS
+            rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
+            return rank_list
+             
+        rank_list = df_pop[200:300] # return "random" 100 cuts
 
         df = pd.DataFrame(df_pop)
-        # use apply() with a lambda function to unpack each list into three separate values
-        df[['A', 'B', 'C']] = df[1].apply(lambda x: pd.Series(x))
+        df.to_csv('test.csv', index=None)
 
-        # Transform A, B, C to object columns (categorical)
-        df[['A', 'B', 'C']] = df[['A', 'B', 'C']].astype(object)
+        df = pd.read_csv("test.csv", index_col=0)
+        df['1'] = df['1'].apply(lambda x: json.loads(x))
+        df['3'] = df['3'].apply(lambda x: ast.literal_eval(x))
+        df['3'] = [list(t) for t in df['3']]
+        df[['A', 'B', 'C']] = df['1'].apply(lambda x: pd.Series(x))
 
-        # KModes for Categorical Variables
-        N_CLUSTERS = 20
-        kmode = KModes(n_clusters=N_CLUSTERS, init='Huang', 
-                    n_init=5)
+        data = df[['A','B','C','2']].astype('float32')
 
-        clusters = kmode.fit_predict(df[['A','B','C']])
-        df['kmodes'] = clusters
+        n_inputs = data.shape[1]
 
-        SELECTED_CUTS = [df[df['kmodes'] == cls].sort_values(by=2, ascending=False).index[:5].values for cls in range(N_CLUSTERS)]
-        SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+        autoencoder = Sequential([
+            Dense(10, activation='relu', input_shape = (n_inputs,), name='input_layer'),
+            Dense(15, activation='relu'),
+            Dense(20, activation='relu', name='latent_layer'),
+            Dense(15, activation='relu'),
+            Dense(10, activation='relu'),
+            Dense(n_inputs, activation='relu')
+        ])
 
+        autoencoder.compile(optimizer = 'adam', loss = 'mse')
+        h = autoencoder.fit(data, data, epochs=50, verbose=1)
 
-        # get the elements of the initial list based on the index
-        # cuts_idx = df[:100].index # get index of selected cuts
-        cuts_idx = SELECTED_CUTS
-        rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
+        # create a new model that outputs the predictions of the latent_layer
+        latent_layer_model = Model(inputs=autoencoder.input, outputs=autoencoder.get_layer('latent_layer').output)
+
+        # get the predictions of the latent_layer for the input data
+        latent_layer_predictions = latent_layer_model.predict(data)
+
+        result_df = pd.DataFrame(latent_layer_predictions)
+
+# *******
+        '''KMODES'''
+        def kmeans(df, df_pop):
+            
+            # KModes for Categorical Variables
+            N_CLUSTERS = 20
+            kmeans = KMeans(n_clusters=N_CLUSTERS)
+
+            kmeans.fit(df)
+            df['kmeans'] = kmeans.labels_
+
+            SELECTED_CUTS = [df[df['kmeans'] == cls].sort_values(by=2, ascending=False).index[:5].values for cls in range(N_CLUSTERS)]
+            SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+
+            # get the elements of the initial list based on the index
+            # cuts_idx = df[:100].index # get index of selected cuts
+            cuts_idx = SELECTED_CUTS
+            rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
+            return rank_list
+
+        rank_list = kmeans(result_df, df_pop)
 
         return rank_list
