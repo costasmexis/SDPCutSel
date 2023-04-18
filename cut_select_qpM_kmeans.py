@@ -1072,15 +1072,14 @@ class CutSolverK(object):
                     for i in range(len(set_inds)):
                         x_pop[set_inds[i]]=curr_pt[i]                                                
                     population.append(x_pop)
-                    if cut_round == 1:
-                        df_pop.append(rank_list[agg_idx])  
+                    df_pop.append(rank_list[agg_idx])
                     nb_violated += 1
             
+            
 # *************
-        rank_list = df_pop[:100] # Return the first 100 lines just to check...
-        ''' KMODES '''
-        df = pd.DataFrame(df_pop)
+        '''KMODES'''
 
+        df = pd.DataFrame(df_pop)
         # use apply() with a lambda function to unpack each list into three separate values
         df[['A', 'B', 'C']] = df[1].apply(lambda x: pd.Series(x))
 
@@ -1098,10 +1097,10 @@ class CutSolverK(object):
         SELECTED_CUTS = [df[df['kmodes'] == cls].sort_values(by=2, ascending=False).index[:5].values for cls in range(N_CLUSTERS)]
         SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
 
-        df.drop(columns=['A','B','C','kmodes'], inplace=True)
-        rank_list = df.loc[SELECTED_CUTS]
-        # rank_list[0] = SELECTED_CUTS
 
-        print(list(rank_list.head(2).values))
+        # get the elements of the initial list based on the index
+        # cuts_idx = df[:100].index # get index of selected cuts
+        cuts_idx = SELECTED_CUTS
+        rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
 
-        return list(rank_list)
+        return rank_list
