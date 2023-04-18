@@ -22,6 +22,8 @@ from mosek.fusion import Domain, Expr, Model, ObjectiveSense
 from keras.layers import Dense, Input
 from keras.models import Model, Sequential
 
+from sklearn.cluster import Birch
+
 from kmodes.kmodes import KModes
 import json
 import ast
@@ -1107,8 +1109,6 @@ class CutSolverK(object):
             rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
             return rank_list
              
-        rank_list = df_pop[200:300] # return "random" 100 cuts
-
         df = pd.DataFrame(df_pop)
         df.to_csv('test.csv', index=None)
 
@@ -1118,32 +1118,49 @@ class CutSolverK(object):
         df['3'] = [list(t) for t in df['3']]
         df[['A', 'B', 'C']] = df['1'].apply(lambda x: pd.Series(x))
 
-        data = df[['A','B','C','2']].astype('float32')
+        # concatenate columns vertically
+        concatenated = pd.concat([df['A'], df['B'], df['C']], axis=0)
+        # print(np.sort(concatenated.unique()))
 
-        n_inputs = data.shape[1]
+        # Create the sparse dataset
+        X = pd.DataFrame(columns=['col_{}'.format(i) for i in range(70)], 
+                        index=range(df.shape[0]))
+        
+        for row in range(X.shape[0]):
+            A = df['A'].iloc[row]
+            B = df['B'].iloc[row]
+            C = df['C'].iloc[row]
+            X['col_{}'.format(A)].loc[row] = 1
+            X['col_{}'.format(B)].loc[row] = 1
+            X['col_{}'.format(C)].loc[row] = 1
+
+        X['col'] = df['2'].copy()
+        print(X.shape)
+        X.fillna(0, inplace=True)
+
+        n_inputs = X.shape[1]
 
         autoencoder = Sequential([
-            Dense(10, activation='relu', input_shape = (n_inputs,), name='input_layer'),
-            Dense(15, activation='relu'),
-            Dense(20, activation='relu', name='latent_layer'),
-            Dense(15, activation='relu'),
-            Dense(10, activation='relu'),
+            Dense(300, activation='relu', input_shape = (n_inputs,), name='input_layer'),
+            Dense(50, activation='relu', name='latent_layer'),
+            Dense(300, activation='relu'),
             Dense(n_inputs, activation='relu')
         ])
 
         autoencoder.compile(optimizer = 'adam', loss = 'mse')
-        h = autoencoder.fit(data, data, epochs=50, verbose=1)
+        h = autoencoder.fit(X, X, epochs=25, batch_size=524, verbose=1)
 
         # create a new model that outputs the predictions of the latent_layer
-        latent_layer_model = Model(inputs=autoencoder.input, outputs=autoencoder.get_layer('latent_layer').output)
+        latent_layer_model = Model(inputs=autoencoder.input, 
+                                   outputs=autoencoder.get_layer('latent_layer').output)
 
-        # get the predictions of the latent_layer for the input data
-        latent_layer_predictions = latent_layer_model.predict(data)
+        # get the predictions of the latent_layer for the input X
+        latent_layer_predictions = latent_layer_model.predict(X)
 
         result_df = pd.DataFrame(latent_layer_predictions)
 
 # *******
-        '''KMODES'''
+        '''KMEANS'''
         def kmeans(df, df_pop):
             
             # KModes for Categorical Variables
@@ -1162,6 +1179,26 @@ class CutSolverK(object):
             rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
             return rank_list
 
-        rank_list = kmeans(result_df, df_pop)
+        
+        '''BIRCH'''
+        def birch_clustering(df, df_pop):
+            
+            # KModes for Categorical Variables
+            N_CLUSTERS = 20
+            clustering = Birch(n_clusters=N_CLUSTERS, threshold=.3)
+            clustering.fit_predict(df)
+            df['clustering'] = clustering.labels_
+
+            SELECTED_CUTS = [df[df['clustering'] == cls].sort_values(by=2, ascending=False).index[:5].values for cls in range(N_CLUSTERS)]
+            SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+
+            # get the elements of the initial list based on the index
+            # cuts_idx = df[:100].index # get index of selected cuts
+            cuts_idx = SELECTED_CUTS
+            rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
+            return rank_list
+         
+        rank_list = birch_clustering(result_df, df_pop)
+        # rank_list = df_pop[200:300] # return "random" 100 cuts
 
         return rank_list
