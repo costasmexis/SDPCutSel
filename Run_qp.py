@@ -46,6 +46,6 @@ for filename in boxqpinst : # iterate over boxqp instances
 results={'Solution': solK,'Time': timeK}
 df = pd.DataFrame(results)
 # Change the current working directory to the folder you wanna save the .csv file
-os.chdir('C:/Users/mexis/OneDrive/Υπολογιστής/SDPCutSel-via-NN-master/Results/')
+os.chdir('C:/Users/mexis/OneDrive/Υπολογιστής/SDPCutSel/Results/')
 File_name='Kmeans ' + strategies[strat] + ' ' + str(n_clusters) + ' clusters.csv'
 df.to_csv(File_name, header='column_names',index=False)

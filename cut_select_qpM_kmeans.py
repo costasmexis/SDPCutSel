@@ -22,9 +22,12 @@ from mosek.fusion import Domain, Expr, Model, ObjectiveSense
 from keras.layers import Dense, Input
 from keras.models import Model, Sequential
 
+from sklearn.decomposition import PCA
 from sklearn.cluster import Birch
-
+from sklearn.cluster import AgglomerativeClustering
 from kmodes.kmodes import KModes
+import gower
+
 import json
 import ast
 
@@ -258,13 +261,13 @@ class CutSolverK(object):
         #m Save to csv the rank_list from all cut rounds 
         if strat==1:
          df_print.rename(columns={0:'agg_idx',1:'set_inds',2:'-eigeval',3:'curr_pt',4:'Xarr_inds',5:'dim_act'}, inplace=True)
-         df_print.to_csv((r'C:\Users\mexis\OneDrive\Υπολογιστής\SDPCutSel-via-NN-master\Results\DataFrame_clustering.csv'))#m 
+         df_print.to_csv((r'C:\Users\mexis\OneDrive\Υπολογιστής\SDPCutSel\Results\DataFrame_clustering.csv'))#m 
         if strat==2:
          df_print.rename(columns={0:'agg_idx',1:'set_inds',2:'obj_improve',3:'curr_pt',4:'X_slice'}, inplace=True)
-         df_print.to_csv((r'C:\Users\mexis\OneDrive\Υπολογιστής\SDPCutSel-via-NN-master\Results\DataFrame_clustering.csv'))#m  
+         df_print.to_csv((r'C:\Users\mexis\OneDrive\Υπολογιστής\SDPCutSel\Results\DataFrame_clustering.csv'))#m  
         if strat==4:
          df_print.rename(columns={0:'agg_idx',1:'set_inds',2:'performance',3:'curr_pt',4:'X_slice'}, inplace=True)
-         df_print.to_csv((r'C:\Users\mexis\OneDrive\Υπολογιστής\SDPCutSel-via-NN-master\Results\DataFrame_clustering.csv'))#m                  
+         df_print.to_csv((r'C:\Users\mexis\OneDrive\Υπολογιστής\SDPCutSel\Results\DataFrame_clustering.csv'))#m                  
 
         
         # Default behaviour (for constructing tables)
@@ -938,7 +941,8 @@ class CutSolverK(object):
             (strat == 1), (strat == 2), (strat == 3), (strat == 4), (strat == 5), (strat == -1)
         
         if opt_sel or comb_sel or exact_sel:
-            nns = self._nns         
+            nns = self._nns  
+            df_pop=[]       
             for agg_idx, (set_inds, Xarr_inds, Q_slice, max_elem) in enumerate(agg_list):
                 x_pop=[0]*(n)               
                 dim_act = len(set_inds)
@@ -953,14 +957,13 @@ class CutSolverK(object):
                     input_arr[dim_act:] = Q_slice
                     obj_improve += nns[dim_act - 2][0](input_arr) * max_elem #m 
                 rank_list[agg_idx] = (agg_idx,set_inds,obj_improve, curr_pt, X_slice)#m add set ind
-
+               
                 for i in range(len(set_inds)):
                     x_pop[set_inds[i]]=curr_pt[i]                                                
                 population.append(x_pop)
+                df_pop.append(rank_list[agg_idx])
             print('the len of the pop is', len(population))
               
- 
-            
             # Combined selection #m I have allready created the population so now I am /
             # checking withtin the rank list and not agg_list
             if comb_sel:
@@ -986,71 +989,69 @@ class CutSolverK(object):
                             violated_cuts += 1
                     else:
                         break
-
-            pop_kmeans=np.asarray(population) 
-            print('the  len combined population is', len(population))
-            kmeans=KMeans(n_clusters= n_clusters ).fit(pop_kmeans)
-            labels=kmeans.labels_                 
-            count_dupl=dict(Counter(labels))
-            #print(count_dupl)
+            
+            # pop_kmeans=np.asarray(population) 
+            # print('the  len combined population is', len(population))
+            # kmeans=KMeans(n_clusters= n_clusters ).fit(pop_kmeans)
+            # labels=kmeans.labels_                 
+            # count_dupl=dict(Counter(labels))
+            # #print(count_dupl)
   
-            rank_list_new=[] 
-            if n_clusters>=100:
-                for cluster in range(n_clusters):
-                    rank_list_cluster=[] #rank lits for cluster's elements
-                    for element in range(len(agg_list)):
-                      if labels[element]==cluster:
-                          rank_list_cluster.append(rank_list[element])
-                    amb_aggidx= max(rank_list_cluster, key=lambda x: x[2])[0] #agg_idx of the ambassador element of a cluster
-                  # print(amb_aggidx)
-                    rank_list_new.append(rank_list[amb_aggidx])
-                    rank_list_new.sort(key=itemgetter(2), reverse=True)
+            # rank_list_new=[] 
+            # if n_clusters>=100:
+            #     for cluster in range(n_clusters):
+            #         rank_list_cluster=[] #rank lits for cluster's elements
+            #         for element in range(len(agg_list)):
+            #           if labels[element]==cluster:
+            #               rank_list_cluster.append(rank_list[element])
+            #         amb_aggidx= max(rank_list_cluster, key=lambda x: x[2])[0] #agg_idx of the ambassador element of a cluster
+            #       # print(amb_aggidx)
+            #         rank_list_new.append(rank_list[amb_aggidx])
+            #         rank_list_new.sort(key=itemgetter(2), reverse=True)
 
-            elif n_clusters<100:
-                for cluster in range(n_clusters):
-                    rank_list_cluster=[] #rank lits for cluster's elements
-                    for element in range(len(agg_list)):
-                      if labels[element]==cluster:
-                          rank_list_cluster.append(rank_list[element])
-                    ########Here is where I have to insert fast discard
-                    print('I am in fastdisc')
-                    df=pd.DataFrame(rank_list_cluster[0:500])
-                    df.rename(columns={0:'agg_idx',1:'set_inds',2:'performance',3:'curr_pt',4:'X_slice'}, inplace=True)                          
-                    gen_col=df['set_inds'] #get the set_inds column 
-                    df_setind=pd.DataFrame(gen_col) 
-                    df_setind = pd.DataFrame(df_setind['set_inds'].values.tolist(), index=df.index) #take values  to lst and renew df
-                    idx_reE=[] #it will be the extended list of idx_re
-                    keep_list=[]
-                    for j in range(0,len(df_setind)-1):
-                        if j in idx_reE: #if I have allready checked the triplet proceed with the next one
-                            continue
-                        curr_indS=df_setind.loc[j] #type = panda.Series
-                        curr_inds=curr_indS.tolist() #convert Series to list                    
-                        idx=[j]
-                        for i in range(1,len(df_setind)): # key error for .loc, if len(df)+1
-                            if i in idx_reE : #if I have allready checked the triplet proceed with the next one
-                                continue
-                            look_indS=df_setind.loc[i]
-                            look_inds=look_indS.tolist()
-                            common=set(curr_inds)& set(look_inds)
-                            if len(common)== 2:
-                                idx.append(i)
-                        keep_list.append(idx[0])
-                        #if len(maxlenind)>3 : # if I don't use that I get a much smaller keep_list
-                        idx_reE.extend(idx)
-                    df_rankN=df.filter(items=keep_list,axis=0)
-                    rank_list_cluster=df_rankN.values.tolist() #convert DataFrame to list                                                                                                
-                    rank_list_cluster.sort(key=itemgetter(2), reverse=True)
-                    rank_list_new.extend(rank_list_cluster[0:n_amb]) 
+            # elif n_clusters<100:
+            #     for cluster in range(n_clusters):
+            #         rank_list_cluster=[] #rank lits for cluster's elements
+            #         for element in range(len(agg_list)):
+            #           if labels[element]==cluster:
+            #               rank_list_cluster.append(rank_list[element])
+            #         ########Here is where I have to insert fast discard
+            #         print('I am in fastdisc')
+            #         df=pd.DataFrame(rank_list_cluster[0:500])
+            #         df.rename(columns={0:'agg_idx',1:'set_inds',2:'performance',3:'curr_pt',4:'X_slice'}, inplace=True)                          
+            #         gen_col=df['set_inds'] #get the set_inds column 
+            #         df_setind=pd.DataFrame(gen_col) 
+            #         df_setind = pd.DataFrame(df_setind['set_inds'].values.tolist(), index=df.index) #take values  to lst and renew df
+            #         idx_reE=[] #it will be the extended list of idx_re
+            #         keep_list=[]
+            #         for j in range(0,len(df_setind)-1):
+            #             if j in idx_reE: #if I have allready checked the triplet proceed with the next one
+            #                 continue
+            #             curr_indS=df_setind.loc[j] #type = panda.Series
+            #             curr_inds=curr_indS.tolist() #convert Series to list                    
+            #             idx=[j]
+            #             for i in range(1,len(df_setind)): # key error for .loc, if len(df)+1
+            #                 if i in idx_reE : #if I have allready checked the triplet proceed with the next one
+            #                     continue
+            #                 look_indS=df_setind.loc[i]
+            #                 look_inds=look_indS.tolist()
+            #                 common=set(curr_inds)& set(look_inds)
+            #                 if len(common)== 2:
+            #                     idx.append(i)
+            #             keep_list.append(idx[0])
+            #             #if len(maxlenind)>3 : # if I don't use that I get a much smaller keep_list
+            #             idx_reE.extend(idx)
+            #         df_rankN=df.filter(items=keep_list,axis=0)
+            #         rank_list_cluster=df_rankN.values.tolist() #convert DataFrame to list                                                                                                
+            #         rank_list_cluster.sort(key=itemgetter(2), reverse=True)
+            #         rank_list_new.extend(rank_list_cluster[0:n_amb]) 
                         
 
-            if len(rank_list_new)>100 :
-             rank_list=rank_list_new[0:100]                 
-            else:
-             rank_list=rank_list_new
+            # if len(rank_list_new)>100 :
+            #  rank_list=rank_list_new[0:100]                 
+            # else:
+            #  rank_list=rank_list_new
 
-
-               
             if comb_sel:
                 try:
                     return (1, rank_list) if strong_violated_cuts/sel_size < violated_cuts/len(rank_list)\
@@ -1074,7 +1075,6 @@ class CutSolverK(object):
                     rank_list[agg_idx] = (agg_idx, set_inds, -eigval, curr_pt, Xarr_inds, dim_act)  #added agg_idx               
                     aggidx_viol.append(agg_idx)
 
-# *************
                     for i in range(len(set_inds)):
                         x_pop[set_inds[i]]=curr_pt[i]                                                
                     population.append(x_pop)
@@ -1084,7 +1084,7 @@ class CutSolverK(object):
             
 # *************
         '''KMODES'''
-        def kmodes(df_pop):
+        def _kmodes_clustering(df_pop, n_clusters=20):
             df = pd.DataFrame(df_pop)
             # use apply() with a lambda function to unpack each list into three separate values
             df[['A', 'B', 'C']] = df[1].apply(lambda x: pd.Series(x))
@@ -1093,14 +1093,15 @@ class CutSolverK(object):
             df[['A', 'B', 'C']] = df[['A', 'B', 'C']].astype(object)
 
             # KModes for Categorical Variables
-            N_CLUSTERS = 20
+            N_CLUSTERS = n_clusters
             kmode = KModes(n_clusters=N_CLUSTERS, init='Huang', 
                         n_init=5)
 
             clusters = kmode.fit_predict(df[['A','B','C']])
             df['kmodes'] = clusters
 
-            SELECTED_CUTS = [df[df['kmodes'] == cls].sort_values(by=2, ascending=False).index[:5].values for cls in range(N_CLUSTERS)]
+            NUM_ELEMENTS = int(100/N_CLUSTERS)
+            SELECTED_CUTS = [df[df['kmodes'] == cls].sort_values(by=2, ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
             SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
 
             # get the elements of the initial list based on the index
@@ -1108,69 +1109,73 @@ class CutSolverK(object):
             cuts_idx = SELECTED_CUTS
             rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
             return rank_list
-             
-        df = pd.DataFrame(df_pop)
-        df.to_csv('test.csv', index=None)
 
-        df = pd.read_csv("test.csv", index_col=0)
-        df['1'] = df['1'].apply(lambda x: json.loads(x))
-        df['3'] = df['3'].apply(lambda x: ast.literal_eval(x))
-        df['3'] = [list(t) for t in df['3']]
-        df[['A', 'B', 'C']] = df['1'].apply(lambda x: pd.Series(x))
+        '''EMBEDDING USING VAC'''     
+        def _autoencoder(df_pop):
+                
+            df = pd.DataFrame(df_pop)
+            df.to_csv('test.csv', index=None)
 
-        # concatenate columns vertically
-        concatenated = pd.concat([df['A'], df['B'], df['C']], axis=0)
-        # print(np.sort(concatenated.unique()))
+            df = pd.read_csv("test.csv", index_col=0)
+            df['1'] = df['1'].apply(lambda x: json.loads(x))
+            df['3'] = df['3'].apply(lambda x: ast.literal_eval(x))
+            df['3'] = [list(t) for t in df['3']]
+            df[['A', 'B', 'C']] = df['1'].apply(lambda x: pd.Series(x))
 
-        # Create the sparse dataset
-        X = pd.DataFrame(columns=['col_{}'.format(i) for i in range(70)], 
-                        index=range(df.shape[0]))
-        
-        for row in range(X.shape[0]):
-            A = df['A'].iloc[row]
-            B = df['B'].iloc[row]
-            C = df['C'].iloc[row]
-            X['col_{}'.format(A)].loc[row] = 1
-            X['col_{}'.format(B)].loc[row] = 1
-            X['col_{}'.format(C)].loc[row] = 1
+            # concatenate columns vertically
+            concatenated = pd.concat([df['A'], df['B'], df['C']], axis=0)
+            # print(np.sort(concatenated.unique()))
 
-        X['col'] = df['2'].copy()
-        print(X.shape)
-        X.fillna(0, inplace=True)
+            # Create the sparse dataset
+            X = pd.DataFrame(columns=['col_{}'.format(i) for i in range(70)], 
+                            index=range(df.shape[0]))
+            
+            for row in range(X.shape[0]):
+                A = df['A'].iloc[row]
+                B = df['B'].iloc[row]
+                C = df['C'].iloc[row]
+                X['col_{}'.format(A)].loc[row] = 1
+                X['col_{}'.format(B)].loc[row] = 1
+                X['col_{}'.format(C)].loc[row] = 1
 
-        n_inputs = X.shape[1]
+            X['col'] = df['2'].copy()
+            X.fillna(0, inplace=True)
 
-        autoencoder = Sequential([
-            Dense(300, activation='relu', input_shape = (n_inputs,), name='input_layer'),
-            Dense(50, activation='relu', name='latent_layer'),
-            Dense(300, activation='relu'),
-            Dense(n_inputs, activation='relu')
-        ])
+            n_inputs = X.shape[1]
 
-        autoencoder.compile(optimizer = 'adam', loss = 'mse')
-        h = autoencoder.fit(X, X, epochs=25, batch_size=524, verbose=1)
+            autoencoder = Sequential([
+                Dense(50, activation='relu', input_shape = (n_inputs,), name='input_layer'),
+                Dense(20,  activation='relu', name='latent_layer'),
+                Dense(50, activation='relu'),
+                Dense(n_inputs, activation='relu')
+            ])
 
-        # create a new model that outputs the predictions of the latent_layer
-        latent_layer_model = Model(inputs=autoencoder.input, 
-                                   outputs=autoencoder.get_layer('latent_layer').output)
+            autoencoder.compile(optimizer = 'adam', loss = 'mse')
+            h = autoencoder.fit(X, X, epochs=100, batch_size=248, verbose=1)
 
-        # get the predictions of the latent_layer for the input X
-        latent_layer_predictions = latent_layer_model.predict(X)
+            # create a new model that outputs the predictions of the latent_layer
+            latent_layer_model = Model(inputs=autoencoder.input, 
+                                    outputs=autoencoder.get_layer('latent_layer').output)
 
-        result_df = pd.DataFrame(latent_layer_predictions)
+            # get the predictions of the latent_layer for the input X
+            latent_layer_predictions = latent_layer_model.predict(X)
 
-# *******
+            result_df = pd.DataFrame(latent_layer_predictions)
+
+            return result_df
+
         '''KMEANS'''
-        def kmeans(df, df_pop):
+        def _kmeans_clustering(df, df_pop, n_clusters=20):
             
             # KModes for Categorical Variables
-            N_CLUSTERS = 20
+            N_CLUSTERS = n_clusters
             kmeans = KMeans(n_clusters=N_CLUSTERS)
 
             kmeans.fit(df)
             df['kmeans'] = kmeans.labels_
 
-            SELECTED_CUTS = [df[df['kmeans'] == cls].sort_values(by=2, ascending=False).index[:5].values for cls in range(N_CLUSTERS)]
+            NUM_ELEMENTS = int(100/N_CLUSTERS)
+            SELECTED_CUTS = [df[df['kmeans'] == cls].sort_values(by=2, ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
             SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
 
             # get the elements of the initial list based on the index
@@ -1181,7 +1186,7 @@ class CutSolverK(object):
 
         
         '''BIRCH'''
-        def birch_clustering(df, df_pop):
+        def _birch_clustering(df, df_pop):
             
             # KModes for Categorical Variables
             N_CLUSTERS = 20
@@ -1197,8 +1202,72 @@ class CutSolverK(object):
             cuts_idx = SELECTED_CUTS
             rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
             return rank_list
-         
-        rank_list = birch_clustering(result_df, df_pop)
+        
+        '''PCA'''
+        def _pca(df, n_components=5):
+            # instantiate a PCA object with the desired number of components
+            pca = PCA(n_components=n_components)
+
+            # fit the PCA model to the data and transform the data
+            pca_data = pca.fit_transform(df)
+
+            # create a new dataframe from the transformed data
+            columns = ['PCA_component_{}'.format(i+1) for i in range(n_components)]
+            result_df = pd.DataFrame(pca_data)
+            return result_df
+        
+        def _gower_dissimilarity(df_pop):
+            df = pd.DataFrame(df_pop)
+            # use apply() with a lambda function to unpack each list into three separate values
+            df[['A', 'B', 'C']] = df[1].apply(lambda x: pd.Series(x))
+
+            # Transform A, B, C to object columns (categorical)
+            df[['A', 'B', 'C']] = df[['A', 'B', 'C']].astype(object)
+
+            gower_matrix = gower.gower_matrix(df[['A','B','C',2]])
+
+            return gower_matrix
+
+        def _agglomerative_clustering(df, df_pop, n_clusters=20):
+            N_CLUSTERS = n_clusters
+            clustering = AgglomerativeClustering(n_clusters=N_CLUSTERS)
+            clustering.fit(df)
+            df['clustering'] = clustering.labels_
+
+            NUM_ELEMENTS = int(100/N_CLUSTERS)
+            SELECTED_CUTS = [df[df['clustering'] == cls].sort_values(by=2, ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
+            SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+
+            # get the elements of the initial list based on the index
+            # cuts_idx = df[:100].index # get index of selected cuts
+            cuts_idx = SELECTED_CUTS
+            rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
+            return rank_list
+
+
+        # rank list using kmodes clustering
+        # rank_list = _kmodes_clustering(df_pop, 100)  
+
+        # use autoencoder to get an embedding
+        # result_df = _autoencoder(df_pop)
+        # rank_list = _kmeans_clustering(result_df, df_pop, n_clusters=50)
+
+        # use gower dissimilarity
+        # gower_matrix = _gower_dissimilarity(df_pop=df_pop)
+        # similarity = 1 / (1 + gower_matrix)
+        # similarity = pd.DataFrame(similarity)
+        # rank_list = _agglomerative_clustering(similarity, df_pop)
+
+        
         # rank_list = df_pop[200:300] # return "random" 100 cuts
+        df = pd.DataFrame(df_pop)
+        df.sort_values(by=2, ascending=False, inplace=True)
+
+        SELECTED_CUTS = df.index[:100].values
+
+        # get the elements of the initial list based on the index
+        # cuts_idx = df[:100].index # get index of selected cuts
+        cuts_idx = SELECTED_CUTS
+        rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
 
         return rank_list
