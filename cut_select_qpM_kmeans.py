@@ -1050,11 +1050,11 @@ class CutSolverK(object):
             rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
             return rank_list
 
-        def _spectral_clustering(df, df_pop, n_clusters=100):
+        def _spectral_clustering(m, df, df_pop, n_clusters=100):
            
             N_CLUSTERS = n_clusters
             clustering = SpectralClustering(n_clusters=N_CLUSTERS, affinity='precomputed')
-            clustering.fit(df)
+            clustering.fit(m)
             df['clustering'] = clustering.labels_
 
             NUM_ELEMENTS = int(100/N_CLUSTERS)
@@ -1071,43 +1071,14 @@ class CutSolverK(object):
             return rank_list
 
         
-        def _compute_dissimilarity_matrix(df):
+        df.sort_values(by='2', ascending=False, inplace=True)
 
-            def _dissimilarity(a, b):
-                a_set = set(a)
-                b_set = set(b)
-                if a_set == b_set:
-                    return 0
-                else:
-                    return len(a_set.union(b_set)) - len(a_set.intersection(b_set))
+        SELECTED_CUTS = df[:100].index.values
 
-            n = len(df)
-            dissimilarity_matrix = np.zeros((n,n))
-            # Compute dissimilarity between all pairs of rows
-            for i in tqdm(range(n)):
-                for j in range(i+1, n):
-                    listA = [df['A'].iloc[i], df['B'].iloc[i], df['C'].iloc[i]]
-                    listB = [df['A'].iloc[j], df['B'].iloc[j], df['C'].iloc[j]]
-
-                    dissimilarity_matrix[i, j] = _dissimilarity(listA, listB)
-                    dissimilarity_matrix[j, i] = dissimilarity_matrix[i, j]
-
-            # Print the resulting dissimilarity matrix
-            dissimilarity_matrix = pd.DataFrame(dissimilarity_matrix)
-            # dissimilarity_matrix['sum'] = dissimilarity_matrix.sum(axis=1)
-            dissimilarity_matrix = 1 / (1+dissimilarity_matrix)
-
-            return dissimilarity_matrix
-
-        # df = df[:300]
-        # df.reset_index(inplace=True, drop=True)
-        # _df_pop = _df_pop[:300]
-
-        # dissimilarity_matrix = _compute_dissimilarity_matrix(df)        
-
-        # rank_list = _df_pop[:100]
-        rank_list = _kmeans_clustering(df, _df_pop)
-        # rank_list = _spectral_clustering(df, _df_pop)
+        # get the elements of the initial list based on the index
+        # cuts_idx = df[:100].index # get index of selected cuts
+        cuts_idx = SELECTED_CUTS
+        rank_list = [_df_pop[i] for i in cuts_idx] # return element list based on their cuts
 
         return rank_list
 
