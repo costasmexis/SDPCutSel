@@ -24,7 +24,7 @@ from keras.models import Model, Sequential
 
 from sklearn.decomposition import PCA
 from sklearn.cluster import Birch
-from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import AgglomerativeClustering, SpectralClustering
 from kmodes.kmodes import KModes
 import gower
 from tqdm import tqdm
@@ -1290,21 +1290,40 @@ class CutSolverK(object):
 
         # Print the resulting dissimilarity matrix
         dissimilarity_matrix = pd.DataFrame(dissimilarity_matrix)
+        dissimilarity_matrix = 1 - dissimilarity_matrix
 
-        idx = []
-        for col in dissimilarity_matrix.columns:
-            if len(idx) == 99: break
-            if dissimilarity_matrix[col].iloc[0] >= 3: idx.append(col)
-        idx.append(0)
+        # idx = []
+        # for col in dissimilarity_matrix.columns:
+        #     if len(idx) == 99: break
+        #     if dissimilarity_matrix[col].iloc[0] >= 3: idx.append(col)
+        # idx.append(0)
 
-        if len(idx) != 100: 
-            print("ERROR!!!!")
+        # if len(idx) != 100: 
+        #     print("ERROR!!!!")
 
-        SELECTED_CUTS = df.iloc[idx].index.values
+        # SELECTED_CUTS = df.iloc[idx].index.values
 
-        # get the elements of the initial list based on the index
-        # cuts_idx = df[:100].index # get index of selected cuts
-        cuts_idx = SELECTED_CUTS
-        rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
+        # # get the elements of the initial list based on the index
+        # # cuts_idx = df[:100].index # get index of selected cuts
+        # cuts_idx = SELECTED_CUTS
+        # rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
+
+        def _spectral_clustering(df, df_pop, n_clusters=100):
+            N_CLUSTERS = n_clusters
+            clustering = SpectralClustering(n_clusters=N_CLUSTERS, affinity='precomputed')
+            clustering.fit(df)
+            df['clustering'] = clustering.labels_
+
+            NUM_ELEMENTS = int(100/N_CLUSTERS)
+            SELECTED_CUTS = [df[df['clustering'] == cls].sort_values(by=2, ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
+            SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+
+            # get the elements of the initial list based on the index
+            # cuts_idx = df[:100].index # get index of selected cuts
+            cuts_idx = SELECTED_CUTS
+            rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
+            return rank_list
+
+        rank_list = _spectral_clustering(dissimilarity_matrix, df_pop)
 
         return rank_list

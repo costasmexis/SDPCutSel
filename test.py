@@ -6,17 +6,18 @@ from kmodes.kmodes import KModes
 import gower
 from itertools import combinations
 from tqdm import tqdm
+from sklearn.cluster import SpectralClustering
 
 df = pd.read_csv("test.csv", index_col=0)
-1/0
-df.sort_values(by='2', ascending=False, inplace=True)
 
 df['1'] = df['1'].apply(lambda x: json.loads(x))
 df['3'] = df['3'].apply(lambda x: ast.literal_eval(x))
 df['3'] = [list(t) for t in df['3']]
 df[['A', 'B', 'C']] = df['1'].apply(lambda x: pd.Series(x))
 
-df_toselect = df[['A','B','C']][:100].copy()
+df.drop(columns=['1','3','4'], inplace=True)
+
+df_toselect = df[:100].copy()
 
 def dissimilarity(a, b):
     a_set = set(a)
@@ -39,8 +40,16 @@ for i in tqdm(range(n)):
 
 # Print the resulting dissimilarity matrix
 dissimilarity_matrix = pd.DataFrame(dissimilarity_matrix)
-dissimilarity_matrix['sum'] = dissimilarity_matrix.sum(axis=1)
+# dissimilarity_matrix['sum'] = dissimilarity_matrix.sum(axis=1)
+dissimilarity_matrix = 1/(1+dissimilarity_matrix)
 print(dissimilarity_matrix)
+
+N_CLUSTERS = 100
+clustering = SpectralClustering(n_clusters=N_CLUSTERS, affinity='precomputed')
+clustering.fit(dissimilarity_matrix)
+df_toselect['clustering'] = clustering.labels_
+
+
 
 # idx = []
 # for col in dissimilarity_matrix.columns:
