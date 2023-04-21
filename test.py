@@ -8,6 +8,11 @@ from itertools import combinations
 from tqdm import tqdm
 from sklearn.cluster import SpectralClustering
 
+from keras.layers import Dense, Input
+from keras.models import Model, Sequential
+
+from sklearn.manifold import TSNE
+
 df = pd.read_csv("temp_df_pop.csv", index_col=0)
 df.reset_index(drop=True, inplace=True)
 
@@ -39,69 +44,53 @@ def _create_sparse_df(df):
     X['optimality'] = df['5'].copy()
     return X
 
-'''KMEANS'''
-def _kmeans_clustering(df, df_pop, n_clusters=100):
 
-    # KModes for Categorical Variables
-    N_CLUSTERS = n_clusters
-    kmeans = KMeans(n_clusters=N_CLUSTERS)
+'''EMBEDDING USING VAC'''     
+def _autoencoder(X):
+    n_inputs = X.shape[1]
 
-    kmeans.fit(df)
-    df['kmeans'] = kmeans.labels_
+    autoencoder = Sequential([
+        Dense(50, activation='relu', input_shape = (n_inputs,), name='input_layer'),
+        Dense(500, activation='relu'),
+        Dense(500, activation='relu'),
+        Dense(10,  activation='relu', name='latent_layer'),
+        Dense(500, activation='relu'),
+        Dense(500, activation='relu'),
+        Dense(50, activation='relu'),
+        Dense(n_inputs, activation='relu')
+    ])
 
-    NUM_ELEMENTS = int(100/N_CLUSTERS)
-    try:
-        SELECTED_CUTS = [df[df['kmeans'] == cls].sort_values(by='optimality', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
-    except KeyError:
-        SELECTED_CUTS = [df[df['kmeans'] == cls].sort_values(by='2', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
-    SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+    autoencoder.compile(optimizer = 'adam', loss = 'mse')
+    h = autoencoder.fit(X, X, epochs=2, batch_size=248, 
+                        validation_split=0.30,verbose=1)
 
-    # get the elements of the initial list based on the index
-    # cuts_idx = df[:100].index # get index of selected cuts
-    cuts_idx = SELECTED_CUTS
-    rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
-    return rank_list
+    # create a new model that outputs the predictions of the latent_layer
+    latent_layer_model = Model(inputs=autoencoder.input, 
+                            outputs=autoencoder.get_layer('latent_layer').output)
 
+    # get the predictions of the latent_layer for the input X
+    latent_layer_predictions = latent_layer_model.predict(X)
 
-def _agglomerative_clustering(df, df_pop, n_clusters=100):
-    N_CLUSTERS = n_clusters
-    clustering = AgglomerativeClustering(n_clusters=N_CLUSTERS)
-    clustering.fit(df)
-    df['clustering'] = clustering.labels_
+    result_df = pd.DataFrame(latent_layer_predictions)
 
-    NUM_ELEMENTS = int(100/N_CLUSTERS)
-    SELECTED_CUTS = [df[df['clustering'] == cls].sort_values(by='optimality', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
-    SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
-
-    # get the elements of the initial list based on the index
-    # cuts_idx = df[:100].index # get index of selected cuts
-    cuts_idx = SELECTED_CUTS
-    rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
-    return rank_list
-
-def _spectral_clustering(m, df, df_pop, n_clusters=100):
-    
-    N_CLUSTERS = n_clusters
-    clustering = SpectralClustering(n_clusters=N_CLUSTERS, affinity='precomputed')
-    clustering.fit(m)
-    df['clustering'] = clustering.labels_
-
-    NUM_ELEMENTS = int(100/N_CLUSTERS)
-    try:
-        SELECTED_CUTS = [df[df['clustering'] == cls].sort_values(by='optimality', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
-    except KeyError:
-        SELECTED_CUTS = [df[df['clustering'] == cls].sort_values(by='2', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
-    SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
-
-    # get the elements of the initial list based on the index
-    # cuts_idx = df[:100].index # get index of selected cuts
-    cuts_idx = SELECTED_CUTS
-    rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
-    return rank_list
+    return result_df
 
 
 df.sort_values(by='2', ascending=False, inplace=True)
 SELECTED_CUTS = df[:100].index.values
 
+X = _create_sparse_df(df)
 
+vac_df = _autoencoder(X)
 
+def _learn_manifold(df):
+    df_embedded = TSNE(n_components=2, learning_rate=200,
+                       init='random', perplexity=10).fit_transform(df)
+    return df_embedded
+
+from sklearn.cluster import KMeans
+
+embedded = _learn_manifold(vac_df)
+kmeans = KMeans(n_clusters=20).fit(embedded)
+df['kmeans'] = kmeans.labels_
+SELECTED_CUTS = [df[df['kmeans'] == cls].sort_values(by='2', ascending=False).index[:100].values for cls in range(20)]

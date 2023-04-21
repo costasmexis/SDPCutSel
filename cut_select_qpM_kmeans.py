@@ -22,17 +22,16 @@ from mosek.fusion import Domain, Expr, Model, ObjectiveSense
 from sklearn.decomposition import PCA
 from sklearn.cluster import Birch, SpectralClustering, AgglomerativeClustering
 from kmodes.kmodes import KModes
+from keras.layers import Dense, Input
+from keras.models import Model, Sequential
+from sklearn.manifold import TSNE
 import gower
 from tqdm import tqdm
-
 import json
 import ast
 
 warnings.filterwarnings("error")
 warnings.simplefilter("ignore", DeprecationWarning)
-warnings.filterwarnings("error")
-
-
 
 class CutSolverK(object):
     """QP cutting plane solver object (applied on BoxQP)
@@ -1070,65 +1069,67 @@ class CutSolverK(object):
             rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
             return rank_list
 
+        def _simple_sorting_rank_list(df, df_pop):
+            df.sort_values(by='2', ascending=False, inplace=True)
+            SELECTED_CUTS = df[:100].index.values
+            # get the elements of the initial list based on the index
+            # cuts_idx = df[:100].index # get index of selected cuts
+            cuts_idx = SELECTED_CUTS
+            rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
+            return rank_list
         
+        def _autoencoder(df):
+            n_inputs = df.shape[1]
+
+            autoencoder = Sequential([
+                Dense(50, activation='relu', input_shape = (n_inputs,), name='input_layer'),
+                Dense(500, activation='relu'),
+                Dense(500, activation='relu'),
+                Dense(2000, activation='relu'),
+                Dense(15,  activation='relu', name='latent_layer'),
+                Dense(2000, activation='relu'),
+                Dense(500, activation='relu'),
+                Dense(500, activation='relu'),
+                Dense(50, activation='relu'),
+                Dense(n_inputs, activation='relu')
+            ])
+
+            autoencoder.compile(optimizer = 'adam', loss = 'mse')
+            h = autoencoder.fit(df, df, epochs=50, batch_size=524, 
+                                validation_split=0.45,verbose=1)
+
+            # create a new model that outputs the predictions of the latent_layer
+            latent_layer_model = Model(inputs=autoencoder.input, 
+                                    outputs=autoencoder.get_layer('latent_layer').output)
+
+            # get the predictions of the latent_layer for the input df
+            latent_layer_predictions = latent_layer_model.predict(df)
+
+            result_df = pd.DataFrame(latent_layer_predictions)
+
+            return result_df   
+        
+        def _learn_manifold(df):
+            df_embedded = TSNE(n_components=3, learning_rate=200,
+                            init='random', perplexity=10).fit_transform(df)
+            return df_embedded
+        
+        def _pca(df):
+            pca = PCA(n_components=.95).fit(df)
+            embedded = pca.transform(df)
+            return embedded
+        
+        # rank_list = _simple_sorting_rank_list(df, _df_pop)
         df.sort_values(by='2', ascending=False, inplace=True)
-
-        SELECTED_CUTS = df[:100].index.values
-
-        # get the elements of the initial list based on the index
-        # cuts_idx = df[:100].index # get index of selected cuts
+        df = df.head(300)
+        X = _create_sparse_df(df)
+        vac_df = _autoencoder(X)
+        embedded = _pca(vac_df)
+        kmeans = KMeans(n_clusters=100).fit(embedded)
+        df['kmeans'] = kmeans.labels_
+        SELECTED_CUTS = [df[df['kmeans'] == cls].sort_values(by='2', ascending=False).index[:100].values for cls in range(20)]
+        SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
         cuts_idx = SELECTED_CUTS
         rank_list = [_df_pop[i] for i in cuts_idx] # return element list based on their cuts
 
         return rank_list
-
-
-
-
-
-        '''
-        #comex df.to_csv('test.csv', index=None)
-        df.sort_values(by=5, ascending=False, inplace=True)
-        df[['A', 'B', 'C']] = df[1].apply(lambda x: pd.Series(x))
-
-        df_toselect = df[['A','B','C']][:300].copy()
-        def dissimilarity(a, b):
-            a_set = set(a)
-            b_set = set(b)
-            if a_set == b_set:
-                return 0
-            else:
-                return len(a_set.union(b_set)) - len(a_set.intersection(b_set))
-
-        n = len(df_toselect)
-        dissimilarity_matrix = np.zeros((n,n))
-        # Compute dissimilarity between all pairs of rows
-        for i in tqdm(range(n)):
-            for j in range(i+1, n):
-                listA = [df_toselect['A'].iloc[i], df_toselect['B'].iloc[i], df_toselect['C'].iloc[i]]
-                listB = [df_toselect['A'].iloc[j], df_toselect['B'].iloc[j], df_toselect['C'].iloc[j]]
-
-                dissimilarity_matrix[i, j] = dissimilarity(listA, listB)
-                dissimilarity_matrix[j, i] = dissimilarity_matrix[i, j]
-
-        # Print the resulting dissimilarity matrix
-        dissimilarity_matrix = pd.DataFrame(dissimilarity_matrix)
-
-        idx = []
-        for col in dissimilarity_matrix.columns:
-            if len(idx) == 99: break
-            if dissimilarity_matrix[col].iloc[0] >= 3: idx.append(col)
-        idx.append(0)
-
-        if len(idx) != 100: 
-            print("ERROR!!!!")
-
-        SELECTED_CUTS = df.iloc[idx].index.values
-
-        # get the elements of the initial list based on the index
-        # cuts_idx = df[:100].index # get index of selected cuts
-        cuts_idx = SELECTED_CUTS
-        rank_list = [_df_pop[i] for i in cuts_idx] # return element list based on their cuts
-
-        return rank_list
-'''
