@@ -76,21 +76,23 @@ def _autoencoder(X):
     return result_df
 
 
-df.sort_values(by='2', ascending=False, inplace=True)
-SELECTED_CUTS = df[:100].index.values
+# df.sort_values(by='2', ascending=False, inplace=True)
+# SELECTED_CUTS = df[:100].index.values
 
-X = _create_sparse_df(df)
+# X = _create_sparse_df(df)
 
-vac_df = _autoencoder(X)
+# vac_df = _autoencoder(X)
 
-def _learn_manifold(df):
-    df_embedded = TSNE(n_components=2, learning_rate=200,
-                       init='random', perplexity=10).fit_transform(df)
-    return df_embedded
+# def _learn_manifold(df):
+#     df_embedded = TSNE(n_components=2, learning_rate=200,
+#                        init='random', perplexity=10).fit_transform(df)
+#     return df_embedded
 
-from sklearn.cluster import KMeans
+# from sklearn.cluster import KMeans
 
-embedded = _learn_manifold(vac_df)
-kmeans = KMeans(n_clusters=20).fit(embedded)
-df['kmeans'] = kmeans.labels_
-SELECTED_CUTS = [df[df['kmeans'] == cls].sort_values(by='2', ascending=False).index[:100].values for cls in range(20)]
+# embedded = _learn_manifold(vac_df)
+# kmeans = KMeans(n_clusters=20).fit(embedded)
+# df['kmeans'] = kmeans.labels_
+# SELECTED_CUTS = [df[df['kmeans'] == cls].sort_values(by='2', ascending=False).index[:100].values for cls in range(20)]
+
+rank_list = pd.read_csv('rank_list.csv')
