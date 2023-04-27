@@ -977,6 +977,7 @@ class CutSolverK(object):
                     nb_violated += 1
 
         df_curr_round = pd.DataFrame(df_pop)
+
         FILENAME = 'temp_files/temp_df_pop_{}.csv'.format(cut_round)
         df_curr_round.to_csv(FILENAME, index=None)
         df_curr_round = pd.read_csv(FILENAME, index_col=0)
@@ -988,22 +989,23 @@ class CutSolverK(object):
         df_curr_round[['A', 'B', 'C']] = df_curr_round['1'].apply(lambda x: pd.Series(x))
         df_curr_round.drop(columns=['1','3','4'], inplace=True)
 
-        if cut_round>1:
-            FILENAME = 'temp_files/temp_df_pop_{}.csv'.format(cut_round-1)
-            df_prev_round = pd.read_csv(FILENAME, index_col=0)
-            df_prev_round.reset_index(drop=True, inplace=True)
-
-            df_prev_round['1'] = df_prev_round['1'].apply(lambda x: json.loads(x))
-            df_prev_round['3'] = df_prev_round['3'].apply(lambda x: ast.literal_eval(x))
-            df_prev_round['3'] = [list(t) for t in df_prev_round['3']]
-            df_prev_round[['A', 'B', 'C']] = df_prev_round['1'].apply(lambda x: pd.Series(x))
-
-            df_prev_round.drop(columns=['1','3','4'], inplace=True)
-            df = pd.concat([df_curr_round, df_prev_round], ignore_index=True)
-        else:
+        if cut_round==1:
+            # save full dataframe
+            FILENAME = 'temp_files/full_df_{}.csv'.format(cut_round)
             df = df_curr_round.copy()
+            df.to_csv(FILENAME, index=None)
+            
+        if cut_round>1:
+            FILENAME = 'temp_files/full_df_{}.csv'.format(cut_round-1)
+            df_prev_round = pd.read_csv(FILENAME)
+            df = pd.concat([df_curr_round, df_prev_round], ignore_index=True)
+            # save full dataframe
+            FILENAME = 'temp_files/full_df_{}.csv'.format(cut_round)
+            df.to_csv(FILENAME, index=None)
 
-        def _kmodes_clustering(df, df_curr_round, df_pop, n_clusters=20):
+
+        def _kmodes_clustering(df, df_curr_round, df_pop, n_clusters=100):
+            print(df.shape)
             N_CLUSTERS = n_clusters
 
             # KModes for Categorical Variables
@@ -1170,7 +1172,7 @@ class CutSolverK(object):
         # rank_list = [_df_pop[i] for i in cuts_idx] # return element list based on their cuts
 
         # rank_list = _kmodes_clustering(df, _df_pop)
-               
+        
         rank_list = _kmodes_clustering(df, df_curr_round, _df_pop)
 
         FILENAME= 'temp_files/rank_list_{}.pickle'.format(cut_round)

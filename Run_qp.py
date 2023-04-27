@@ -12,7 +12,7 @@
 '''
 print(__doc__)
 
-from cut_select_qpM_kmeans import CutSolverK # import solver class
+from cut_select_qpM_kmeans_MEMORY import CutSolverK # import solver class
 import numpy as np 
 import pandas as pd
 import itertools
