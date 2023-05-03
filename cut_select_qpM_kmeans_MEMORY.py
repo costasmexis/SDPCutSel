@@ -1002,11 +1002,15 @@ class CutSolverK(object):
             FILENAME = 'temp_files/full_df_{}.csv'.format(cut_round-1)
             df_prev_round = pd.read_csv(FILENAME)
             df = pd.concat([df_curr_round, df_prev_round], ignore_index=True)
+            # sort df by feasibility
+            df.sort_values(by='2', ascending=False, inplace=True)
+            # drop duplicates
+            df.drop_duplicates(subset=['A','B','C'], inplace=True, keep='first')        
             # save full dataframe
             FILENAME = 'temp_files/full_df_{}.csv'.format(cut_round)
             df.to_csv(FILENAME, index=None)
-            df = df.drop(df_curr_round.index) # keeps only previous iterations, but not the current
-
+            # df = df.drop(df_curr_round.index) # keeps only previous iterations, but not the current
+        
         def _custering(df, df_curr_round, df_pop, method='kmodes', n_clusters=100): 
             print(df.shape)
             N_CLUSTERS = n_clusters
@@ -1055,22 +1059,6 @@ class CutSolverK(object):
             X['feasibility'] = df['2'].copy()
             X['optimality'] = df['5'].copy()
             return X
-  
-        def _agglomerative_clustering(df, df_pop, n_clusters=100):
-            N_CLUSTERS = n_clusters
-            clustering = AgglomerativeClustering(n_clusters=N_CLUSTERS)
-            clustering.fit(df)
-            df['clustering'] = clustering.labels_
-
-            NUM_ELEMENTS = int(100/N_CLUSTERS)
-            SELECTED_CUTS = [df[df['clustering'] == cls].sort_values(by='optimality', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
-            SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
-
-            # get the elements of the initial list based on the index
-            # cuts_idx = df[:100].index # get index of selected cuts
-            cuts_idx = SELECTED_CUTS
-            rank_list = [df_pop[i] for i in cuts_idx] # return element list based on their cuts
-            return rank_list
 
         def _simple_sorting_rank_list(df, df_pop):
             df.sort_values(by='2', ascending=False, inplace=True)
@@ -1122,36 +1110,35 @@ class CutSolverK(object):
             embedded = pca.transform(df)
             return embedded
         
-        if cut_round <= 10:
-            rank_list, model = _custering(df, df_curr_round, _df_pop, method='kmeans', n_clusters=100)
+        # if cut_round <= 10:
+        #     rank_list, model = _custering(df, df_curr_round, _df_pop, method='kmeans', n_clusters=100)
 
-            with open('model.pickle','wb') as f:
-                pickle.dump(model, f)
-        else:
-            with open('model.pickle','rb') as f:
-                model = pickle.load(f)
-                clusters = model.predict(df_curr_round[['A','B','C']])
-                df_curr_round['cluster'] = clusters
+        #     with open('model.pickle','wb') as f:
+        #         pickle.dump(model, f)
+        # else:
+        #     with open('model.pickle','rb') as f:
+        #         model = pickle.load(f)
+        #         clusters = model.predict(df_curr_round[['A','B','C']])
+        #         df_curr_round['cluster'] = clusters
 
-                N_CLUSTERS = 100
-                NUM_ELEMENTS = int(100/N_CLUSTERS)
-                try:
-                    SELECTED_CUTS = [df_curr_round[df_curr_round['cluster'] == cls].sort_values(by='feasibility', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
-                except KeyError:
-                    SELECTED_CUTS = [df_curr_round[df_curr_round['cluster'] == cls].sort_values(by='2', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
-                SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+        #         N_CLUSTERS = 100
+        #         NUM_ELEMENTS = int(100/N_CLUSTERS)
+        #         try:
+        #             SELECTED_CUTS = [df_curr_round[df_curr_round['cluster'] == cls].sort_values(by='feasibility', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
+        #         except KeyError:
+        #             SELECTED_CUTS = [df_curr_round[df_curr_round['cluster'] == cls].sort_values(by='2', ascending=False).index[:NUM_ELEMENTS].values for cls in range(N_CLUSTERS)]
+        #         SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
 
-                # get the elements of the initial list based on the index
-                # cuts_idx = df[:100].index # get index of selected cuts
-                cuts_idx = SELECTED_CUTS
-                rank_list = [_df_pop[i] for i in cuts_idx] # return element list based on their cuts
+        #         # get the elements of the initial list based on the index
+        #         # cuts_idx = df[:100].index # get index of selected cuts
+        #         cuts_idx = SELECTED_CUTS
+        #         rank_list = [_df_pop[i] for i in cuts_idx] # return element list based on their cuts
         
         
         # rank_list = _simple_sorting_rank_list(df_curr_round, _df_pop)
-        # rank_list, model = _custering(df, df_curr_round, _df_pop, method='kmeans', n_clusters=100)
-        
+        rank_list, model = _custering(df, df_curr_round, _df_pop, method='kmodes', n_clusters=100)
+
         ''' SAVE rank_list TO pickle '''
-        print('LEN OF rank list:', len(rank_list))
         FILENAME= 'temp_files/rank_list_{}.pickle'.format(cut_round)
         with open(FILENAME, 'wb') as f:
             pickle.dump(rank_list, f)

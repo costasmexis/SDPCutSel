@@ -1142,7 +1142,7 @@ class CutSolverK(object):
             embedded = pca.transform(df)
             return embedded
         
-        rank_list = _simple_sorting_rank_list(df, _df_pop)
+        # rank_list = _simple_sorting_rank_list(df, _df_pop)
         # df.sort_values(by='2', ascending=False, inplace=True)
         # df = df.head(300)
         # X = _create_sparse_df(df)
@@ -1154,10 +1154,8 @@ class CutSolverK(object):
         # SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
         # cuts_idx = SELECTED_CUTS
         # rank_list = [_df_pop[i] for i in cuts_idx] # return element list based on their cuts
-
-        # rank_list = _kmodes_clustering(df, _df_pop)
                
-        # rank_list = _kmodes_clustering(df, _df_pop)
+        rank_list = _kmodes_clustering(df, _df_pop)
         FILENAME= 'temp_files/rank_list_{}.pickle'.format(cut_round)
         with open(FILENAME, 'wb') as f:
             pickle.dump(rank_list, f)
