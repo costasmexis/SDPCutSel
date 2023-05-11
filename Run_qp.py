@@ -24,7 +24,7 @@ sel_size=100 # number of selected cuts
 dim=3 # dimension of low dimensional cuts, only triplets used
 cut_rounds=20 # iterations
 termon= False
-boxqpinst = ["spar070-050-1"] # name of file to input Q
+boxqpinst = ["spar100-050-1"] # name of file to input Q
 # "spar100-025-1", "spar070-050-1","spar070-075-1","spar080-025-1", "spar080-050-1","spar080-075-1","spar090-025-1", "spar090-050-1","spar090-075-1","spar100-025-1", "spar100-050-1","spar100-075-1","spar125-025-1","spar125-050-1","spar125-075-1"] 
 
 # Initiallize

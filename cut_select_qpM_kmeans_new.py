@@ -18,6 +18,9 @@ from sklearn.cluster import KMeans
 import cplex
 from mosek.fusion import Domain, Expr, Model, ObjectiveSense
 
+# imports by comex
+from scipy.sparse import csr_matrix
+
 warnings.filterwarnings("error")
 
 
@@ -1145,7 +1148,7 @@ class CutSolverK(object):
             nns = self._nns 
             get_eigendecomp = self._get_eigendecomp
             nb_violated = 0
-            df_pop=[]
+            _rank_list=[] # comex
             # Rank by eigenvalues (when negative)
             print('I am now running feas selection', cut_round)
             aggidx_viol=[] # agg_idx  meomory for violated cuts 
@@ -1165,35 +1168,57 @@ class CutSolverK(object):
                     rank_list_new[agg_idx] = (agg_idx, set_inds, -eigval, curr_pt, Xarr_inds, obj_improve)
                     df_rank_list_new.append(rank_list_new[agg_idx])          
                     aggidx_viol.append(agg_idx)
+                    _rank_list.append(rank_list[agg_idx]) # comex
                     for i in range(len(set_inds)):
                         x_pop[set_inds[i]]=curr_pt[i]                                                
                     population.append(x_pop)       
                     nb_violated += 1
 
-            print(pd.DataFrame(df_rank_list_new))
-            print(pd.DataFrame(population))
-            1/0
-            pop_kmeans=np.asarray(population) 
-            kmeans=KMeans(n_clusters=N_CLUSTERS ).fit(pop_kmeans)
-            labels=kmeans.labels_        
-            count_dupl=dict(Counter(labels))
+            df = pd.DataFrame(df_rank_list_new) # main compact data
+            df_sparse = pd.DataFrame(population) # main sparse data
 
-            rank_list_new=[] 
-            if N_CLUSTERS==100:
-                for cluster in range(N_CLUSTERS):
-                    rank_list_cluster=[] #rank lits for cluster's elements
-                    for element in range(nb_violated):
-                        if labels[element]==cluster:
-                            hold=aggidx_viol[element]
-                            rank_list_cluster.append(rank_list[hold])
-                    amb_aggidx= max(rank_list_cluster, key=lambda x: x[2])[0] #agg_idx of the ambassador element of a cluster
-                    rank_list_new.append(rank_list[amb_aggidx])
-                    rank_list_new.sort(key=itemgetter(2), reverse=True)
+            # pop_kmeans=np.asarray(population) 
+            # kmeans=KMeans(n_clusters=N_CLUSTERS ).fit(pop_kmeans)
+            # labels=kmeans.labels_        
+    
+            # rank_list_new=[] 
+            # if N_CLUSTERS==100:
+            #     for cluster in range(N_CLUSTERS):
+            #         rank_list_cluster=[] #rank lits for cluster's elements
+            #         for element in range(nb_violated):
+            #             if labels[element]==cluster:
+            #                 hold=aggidx_viol[element]
+            #                 rank_list_cluster.append(rank_list[hold])
+            #         amb_aggidx= max(rank_list_cluster, key=lambda x: x[2])[0] #agg_idx of the ambassador element of a cluster
+            #         rank_list_new.append(rank_list[amb_aggidx])
+            #         rank_list_new.sort(key=itemgetter(2), reverse=True)
  
-            print('Number of elements in rank list:', len(rank_list_new))
-            if len(rank_list_new)>100 :
-              rank_list=rank_list_new[0:100]                 
-            else:
-              rank_list=rank_list_new
+            # if len(rank_list_new)>100 :
+            #   rank_list=rank_list_new[0:100]                 
+            # else:
+            #   rank_list=rank_list_new
+            
+        
+            def _simple_sorting(df, _rank_list):
+                df.sort_values(by=2, ascending=False, inplace=True)
+                cuts_idx=df[:100].index.values
+
+                rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
+                return rank_list
+        
+            def _simple_kmeans(df, df_sparse, _rank_list, n_clusters=N_CLUSTERS):
+                # Convert dataframe to sparse matrix
+                kmeans=KMeans(n_clusters=n_clusters).fit(df_sparse)
+                df['cluster']=kmeans.labels_
+
+                n_elements = int(100/n_clusters)
+                SELECTED_CUTS = [df[df['cluster'] == cls].sort_values(by=2, ascending=False).index[:n_elements].values for cls in range(n_clusters)]
+                SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+                cuts_idx = SELECTED_CUTS
+                rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
+                return rank_list
+                
+            
+            rank_list = _simple_kmeans(df, population, _rank_list)
 
         return rank_list
