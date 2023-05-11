@@ -935,7 +935,7 @@ class CutSolverK(object):
          population.append(x_pop)
         print (len(population))
         pop_kmeans=np.asarray(population) #convert population list to array for kmeans
-        kmeans=KMeans(n_clusters= 50 ).fit(pop_kmeans)
+        kmeans=KMeans(N_CLUSTERS= 50 ).fit(pop_kmeans)
         # print(kmeans.labels_) # show in which cluster does each element belong to strarts from 0
         print(kmeans.cluster_centers_) # show the cluster centers
 
@@ -1127,8 +1127,8 @@ class CutSolverK(object):
         else:
             n=100                
 
-        n_clusters=100
-        print('the number of clusters is', n_clusters)
+        N_CLUSTERS=100
+        print('the number of clusters is', N_CLUSTERS)
         n_amb=10
         population=[]
         nb_lifted, agg_list, Q, get_eigendecomp = self._nb_lifted, self._agg_list, self._Q, self._get_eigendecomp
@@ -1141,126 +1141,6 @@ class CutSolverK(object):
         feas_sel, opt_sel, exact_sel, comb_sel, rand_sel, figure_8 = \
             (strat == 1), (strat == 2), (strat == 3), (strat == 4), (strat == 5), (strat == -1)
         
-        if opt_sel or comb_sel or exact_sel:
-            nns = self._nns         
-            for agg_idx, (set_inds, Xarr_inds, Q_slice, max_elem) in enumerate(agg_list):
-                x_pop=[0]*(n)               
-                dim_act = len(set_inds)
-                curr_pt = itemgetter(*set_inds)(x_vals)
-                X_slice = itemgetter(*Xarr_inds)(X_vals)
-                obj_improve = - sum(map(mul, Q_slice, X_slice)) * max_elem #m I caclulate the current objective value neg value
-                # Optimality selection via neural networks (alone or combined with feasibility)
-                if opt_sel or comb_sel:
-                    # Estimate objective improvement using neural network (after casting input to right ctype)
-                    input_arr = nns[dim_act - 2][1]
-                    input_arr[:dim_act] = curr_pt
-                    input_arr[dim_act:] = Q_slice
-                    obj_improve += nns[dim_act - 2][0](input_arr) * max_elem #m 
-                rank_list[agg_idx] = (agg_idx,set_inds,obj_improve, curr_pt, X_slice)#m add set ind
-
-                for i in range(len(set_inds)):
-                    x_pop[set_inds[i]]=curr_pt[i]                                                
-                population.append(x_pop)
-            print('the len of the pop is', len(population))
-              
- 
-            
-            # Combined selection #m I have allready created the population so now I am /
-            # checking withtin the rank list and not agg_list
-            if comb_sel:
-                strong_violated_cuts = 0
-                violated_cuts = 0
-                for ix, (agg_idx,set_inds, obj_improve, curr_pt, X_slice) in enumerate(rank_list):  #m  added set_inds it enumerates rank_list
-                    if obj_improve > CutSolverK._THRES_MIN_OPT and strong_violated_cuts < sel_size:      # strong cut
-                        # Check smallest eigenvalue for violated cuts
-                        eigval = get_eigendecomp(len(curr_pt), curr_pt, X_slice, False)[0]
-                        if eigval < CutSolverK._THRES_NEG_EIGVAL:    # violated strong cut
-                            rank_list[ix] = (agg_idx,set_inds, obj_improve + CutSolverK._BIG_M, curr_pt, X_slice) #m add setinds
-                            strong_violated_cuts += 1
-                            violated_cuts += 1
-
-                        else:                                       # not violated cut
-                            rank_list[ix] = (agg_idx,set_inds, obj_improve - CutSolverK._BIG_M, curr_pt, X_slice) #m add setinds
-
-                    # if not enough strong violated cuts can be found, employ also selection by feasibility
-                    elif strong_violated_cuts < sel_size:
-                        eigval = get_eigendecomp(len(curr_pt), curr_pt, X_slice, False)[0]
-                        if eigval < CutSolverK._THRES_NEG_EIGVAL:    # violated cut
-                            rank_list[ix] = (agg_idx,set_inds, -eigval, curr_pt, X_slice) #m added set_inds
-                            violated_cuts += 1
-                    else:
-                        break
-
-            pop_kmeans=np.asarray(population) 
-            print('the  len combined population is', len(population))
-            kmeans=KMeans(n_clusters= n_clusters ).fit(pop_kmeans)
-            labels=kmeans.labels_                 
-            count_dupl=dict(Counter(labels))
-            #print(count_dupl)
-  
-            rank_list_new=[] 
-            if n_clusters>=100:
-                for cluster in range(n_clusters):
-                    rank_list_cluster=[] #rank lits for cluster's elements
-                    for element in range(len(agg_list)):
-                      if labels[element]==cluster:
-                          rank_list_cluster.append(rank_list[element])
-                    amb_aggidx= max(rank_list_cluster, key=lambda x: x[2])[0] #agg_idx of the ambassador element of a cluster
-                  # print(amb_aggidx)
-                    rank_list_new.append(rank_list[amb_aggidx])
-                    rank_list_new.sort(key=itemgetter(2), reverse=True)
-
-            elif n_clusters<100:
-                for cluster in range(n_clusters):
-                    rank_list_cluster=[] #rank lits for cluster's elements
-                    for element in range(len(agg_list)):
-                      if labels[element]==cluster:
-                          rank_list_cluster.append(rank_list[element])
-                    ########Here is where I have to insert fast discard
-                    print('I am in fastdisc')
-                    df=pd.DataFrame(rank_list_cluster[0:500])
-                    df.rename(columns={0:'agg_idx',1:'set_inds',2:'performance',3:'curr_pt',4:'X_slice'}, inplace=True)                          
-                    gen_col=df['set_inds'] #get the set_inds column 
-                    df_setind=pd.DataFrame(gen_col) 
-                    df_setind = pd.DataFrame(df_setind['set_inds'].values.tolist(), index=df.index) #take values  to lst and renew df
-                    idx_reE=[] #it will be the extended list of idx_re
-                    keep_list=[]
-                    for j in range(0,len(df_setind)-1):
-                        if j in idx_reE: #if I have allready checked the triplet proceed with the next one
-                            continue
-                        curr_indS=df_setind.loc[j] #type = panda.Series
-                        curr_inds=curr_indS.tolist() #convert Series to list                    
-                        idx=[j]
-                        for i in range(1,len(df_setind)): # key error for .loc, if len(df)+1
-                            if i in idx_reE : #if I have allready checked the triplet proceed with the next one
-                                continue
-                            look_indS=df_setind.loc[i]
-                            look_inds=look_indS.tolist()
-                            common=set(curr_inds)& set(look_inds)
-                            if len(common)== 2:
-                                idx.append(i)
-                        keep_list.append(idx[0])
-                        #if len(maxlenind)>3 : # if I don't use that I get a much smaller keep_list
-                        idx_reE.extend(idx)
-                    df_rankN=df.filter(items=keep_list,axis=0)
-                    rank_list_cluster=df_rankN.values.tolist() #convert DataFrame to list                                                                                                
-                    rank_list_cluster.sort(key=itemgetter(2), reverse=True)
-                    rank_list_new.extend(rank_list_cluster[0:n_amb]) 
-                        
-
-            if len(rank_list_new)>100 :
-             rank_list=rank_list_new[0:100]                 
-            else:
-             rank_list=rank_list_new
-
-
-               
-            if comb_sel:
-                try:
-                    return (1, rank_list) if strong_violated_cuts/sel_size < violated_cuts/len(rank_list)\
-                        else (strat, rank_list)
-                except ZeroDivisionError:
-                    a=1
         if feas_sel:
             nns = self._nns 
             get_eigendecomp = self._get_eigendecomp
@@ -1290,50 +1170,30 @@ class CutSolverK(object):
                     population.append(x_pop)       
                     nb_violated += 1
 
+            print(pd.DataFrame(df_rank_list_new))
+            print(pd.DataFrame(population))
+            1/0
             pop_kmeans=np.asarray(population) 
-            kmeans=KMeans(n_clusters= n_clusters ).fit(pop_kmeans)
+            kmeans=KMeans(n_clusters=N_CLUSTERS ).fit(pop_kmeans)
             labels=kmeans.labels_        
-            inertia=kmeans.inertia_
-            print('the inertia is', inertia)         
             count_dupl=dict(Counter(labels))
-            #print(count_dupl)
-
 
             rank_list_new=[] 
-            if n_clusters>=100:
-                for cluster in range(n_clusters):
+            if N_CLUSTERS==100:
+                for cluster in range(N_CLUSTERS):
                     rank_list_cluster=[] #rank lits for cluster's elements
                     for element in range(nb_violated):
                         if labels[element]==cluster:
                             hold=aggidx_viol[element]
                             rank_list_cluster.append(rank_list[hold])
                     amb_aggidx= max(rank_list_cluster, key=lambda x: x[2])[0] #agg_idx of the ambassador element of a cluster
-                    # print(amb_aggidx)
                     rank_list_new.append(rank_list[amb_aggidx])
                     rank_list_new.sort(key=itemgetter(2), reverse=True)
  
- 
-            if n_clusters<100:
-                for cluster in range(n_clusters):
-                    rank_list_cluster=[] #rank lits for cluster's elements
-                    for element in range(nb_violated):
-                        if labels[element]==cluster:
-                            hold=aggidx_viol[element]
-                            rank_list_cluster.append(rank_list[hold])
-                    rank_list_cluster.sort(key=itemgetter(2), reverse=True)
-                    rank_list_new.extend(rank_list_cluster[0:n_amb])                    
-
+            print('Number of elements in rank list:', len(rank_list_new))
             if len(rank_list_new)>100 :
               rank_list=rank_list_new[0:100]                 
             else:
               rank_list=rank_list_new
 
-
-            #          rank_list[agg_idx] = (set_inds, -eigval,curr_pt, Xarr_inds, dim_act)#m add curr_pt #I want to replace this
-            #         nb_violated += 1
-            #     else:
-            #         rank_list[agg_idx] = (0, 0)
-            # rank_list.sort(key=itemgetter(1), reverse=True)
-            # rank_list = rank_list[0:nb_violated]
-        
         return rank_list
