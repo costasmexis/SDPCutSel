@@ -32,8 +32,6 @@ warnings.filterwarnings("error")
 class CutSolverK(object):
     """QP cutting plane solver object (applied on BoxQP)
     """
-    lala=5 #m
-    print(lala) #m
     # Class algorithmic parameters
     # Threshold of minimum optimality measure to select cut in combined selection
     _THRES_MIN_OPT = 0
@@ -1182,13 +1180,27 @@ class CutSolverK(object):
             df_sparse = pd.DataFrame(population) # main sparse data
             cm._save_data_csv(df,df_sparse,cut_round) # save data of every round
 
-            if cut_round>=15:
-                df = cm._train_dec_tree(df,df_sparse,cut_round)
+            # if cut_round>=10:
+            #     df = cm._train_dec_tree(df,df_sparse,cut_round)
+
+            '''Dimensionality reduction+kmeans'''
+            if cut_round==1: 
+                svd = cm._dimensionality_reduction(df_sparse)
+                df_sparse = svd.transform(df_sparse)
+                # Save the fitted SVD model to a pickle file
+                with open('svd_model.pickle', 'wb') as f:
+                    pickle.dump(svd, f)
+            else:
+                # Load the saved SVD model from the pickle file
+                with open('svd_model.pickle', 'rb') as f:
+                    svd_loaded = pickle.load(f)
+                
+                df_sparse = svd_loaded.transform(df_sparse)
 
             # rank_list = cm._simple_sorting(df, _rank_list)
             rank_list = cm._simple_kmeans(df, df_sparse, _rank_list)
             # rank_list = cm._simple_kmodes(df, _rank_list)
-
+            # rank_list = cm._dbscan(df, df_sparse, _rank_list)
             
             # save rank_list pickle file
             print('Number of elements in rank list:', len(rank_list))

@@ -1,13 +1,18 @@
 import pandas as pd
-from sklearn.cluster import KMeans
-from kmodes.kmodes import KModes
 import json
 import ast
 import pickle
 import os
+import scipy.spatial
+
+# Machine Learning Imports
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.svm import SVR
-import scipy.spatial
+from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
+from kmodes.kmodes import KModes
+from sklearn.decomposition import TruncatedSVD
+import gower
 
 ''' Define constants'''
 N_CLUSTERS = 100
@@ -47,7 +52,7 @@ def _simple_sorting(df, _rank_list):
 def _simple_kmeans(df, df_sparse, _rank_list, n_clusters=N_CLUSTERS):
     # print shape of dataset
     print('Dataset shape:', df_sparse.shape)
-    kmeans=KMeans(n_clusters=n_clusters).fit(df_sparse.values)
+    kmeans=KMeans(n_clusters=n_clusters).fit(df_sparse)
     df['cluster']=kmeans.labels_
 
     n_elements = int(100/n_clusters)
@@ -75,7 +80,7 @@ def _simple_kmodes(df, _rank_list, n_clusters=N_CLUSTERS):
 
 def _train_dec_tree(df, df_sparse, cut_round):
     
-    _df, _df_sparse = _read_data(cut_round-1)
+    _df, _df_sparse = _read_data(1)
 
     train = _df_sparse.copy()
     train['target'] = _df['2'].copy()
@@ -87,11 +92,17 @@ def _train_dec_tree(df, df_sparse, cut_round):
     X_test = test.drop('target',axis=1)
     y_test = test['target'].copy()
 
-    tree = SVR()
-    tree.fit(X_train,y_train)
-    y_pred = tree.predict(X_test)
+    model = XGBRegressor()
+    model.fit(X_train.values, y_train.values)
+    y_pred = model.predict(X_test.values)
+    
     df[2] = y_pred
+    
     return df
 
-
+def _dimensionality_reduction(df_sparse):
+    svd = TruncatedSVD(n_components=5)
+    # Fit the SVD model to the dataset and transform the dataset
+    svd.fit(df_sparse)
+    return svd
 
