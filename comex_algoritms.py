@@ -1,9 +1,12 @@
 import pandas as pd
+import numpy as np
 import json
 import ast
 import pickle
 import os
 import scipy.spatial
+from scipy.spatial.distance import pdist, squareform
+import glob
 
 # Machine Learning Imports
 from sklearn.model_selection import RandomizedSearchCV
@@ -18,7 +21,6 @@ import gower
 N_CLUSTERS = 100
 
 def _save_pickle_ranklist(rank_list, cut_round):
-    
     ''' SAVE rank_list TO pickle '''
     FILENAME= 'temp_files/rank_list_{}.pickle'.format(cut_round)
     with open(FILENAME, 'wb') as f:
@@ -43,6 +45,7 @@ def _preprocess_df(df):
     return df
 
 def _simple_sorting(df, _rank_list):
+    print(df.shape)
     df.sort_values(by=2, ascending=False, inplace=True)
     cuts_idx=df[:100].index.values
 
@@ -92,7 +95,7 @@ def _train_dec_tree(df, df_sparse, cut_round):
     X_test = test.drop('target',axis=1)
     y_test = test['target'].copy()
 
-    model = XGBRegressor()
+    model = DecisionTreeRegressor()
     model.fit(X_train.values, y_train.values)
     y_pred = model.predict(X_test.values)
     
@@ -100,9 +103,63 @@ def _train_dec_tree(df, df_sparse, cut_round):
     
     return df
 
-def _dimensionality_reduction(df_sparse):
-    svd = TruncatedSVD(n_components=5)
-    # Fit the SVD model to the dataset and transform the dataset
-    svd.fit(df_sparse)
-    return svd
+def _create_sparse_df(df):
+    # # ***** create sparse one-hot encoded dataset *******
+    X = pd.DataFrame(0, index=range(df.shape[0]), columns=['col_{}'.format(i) for i in range(100)])
 
+    def set_values(row):
+        A = row['A']
+        B = row['B']
+        C = row['C']
+        X.loc[row.name, 'col_{}'.format(A)] = 1
+        X.loc[row.name, 'col_{}'.format(B)] = 1
+        X.loc[row.name, 'col_{}'.format(C)] = 1
+
+    df.apply(set_values, axis=1)
+
+    X = pd.get_dummies(df[['A', 'B', 'C']], columns=['A', 'B', 'C'], prefix='col')
+    X = X.groupby(level=0, axis=1).max()
+
+    return X
+
+def _rank_list_to_sparse(rank_list):
+    rank_list=pd.DataFrame(rank_list)
+    rank_list['A'] = rank_list[1].apply(lambda x: x[0])
+    rank_list['B'] = rank_list[1].apply(lambda x: x[1])
+    rank_list['C'] = rank_list[1].apply(lambda x: x[2])
+    rank_list_sparse = _create_sparse_df(rank_list)
+    return rank_list_sparse
+
+def _similarity_matrix(df, df_sparse):
+    # jaccard = scipy.spatial.distance.cdist(df_sparse, df_sparse, metric='jaccard')
+    
+    # similarity_matrix = 1-pd.DataFrame(data=jaccard, columns=df_sparse.index.values,  
+    #                          index=df_sparse.index.values)
+    # df['similarity']=similarity_matrix.sum(axis=1)
+
+    # return similarity_matrix, df
+
+    df_sparse_matrix = df_sparse.values
+    similarity_matrix = pdist(df_sparse_matrix, metric='cosine')
+    similarity_matrix = squareform(similarity_matrix)
+    similarity_matrix = pd.DataFrame(similarity_matrix, index=df_sparse.index, columns=df_sparse.index)
+    df['similarity'] = np.mean(similarity_matrix, axis=1)
+    return similarity_matrix, df
+
+def _read_rank_list(filename):
+    with open(filename, 'rb') as f:
+        rank_list = pickle.load(f)
+        
+    rank_list = pd.DataFrame(rank_list)
+    return rank_list
+
+def _read_all_rank_lists():
+    # Get all CSV files in the folder starting with "rank"
+    pickle_files = glob.glob("temp_files/rank_list_*.pickle")
+    dfs = []
+    for f in pickle_files:
+        temp_rl = _read_rank_list(f)
+        dfs.append(temp_rl)
+
+    rank_list = pd.concat(dfs)
+    return rank_list

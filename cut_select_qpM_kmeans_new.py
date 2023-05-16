@@ -1180,28 +1180,54 @@ class CutSolverK(object):
             df_sparse = pd.DataFrame(population) # main sparse data
             cm._save_data_csv(df,df_sparse,cut_round) # save data of every round
 
-            # if cut_round>=10:
-            #     df = cm._train_dec_tree(df,df_sparse,cut_round)
+            '''load data from previous round'''
+            if cut_round==1:
+                folder_path = 'temp_files/'  # Replace with the path to your folder containing pickle files
 
-            '''Dimensionality reduction+kmeans'''
-            if cut_round==1: 
-                svd = cm._dimensionality_reduction(df_sparse)
-                df_sparse = svd.transform(df_sparse)
-                # Save the fitted SVD model to a pickle file
-                with open('svd_model.pickle', 'wb') as f:
-                    pickle.dump(svd, f)
-            else:
-                # Load the saved SVD model from the pickle file
-                with open('svd_model.pickle', 'rb') as f:
-                    svd_loaded = pickle.load(f)
-                
-                df_sparse = svd_loaded.transform(df_sparse)
+                # Iterate over files in the folder
+                for filename in os.listdir(folder_path):
+                    if filename.endswith(".pickle"):  # Check if the file has a .pickle extension
+                        file_path = os.path.join(folder_path, filename)  # Get the full file path
+                        os.remove(file_path)  # Delete the file
+
+            if cut_round > 15:
+                print('Before:',df.shape)            
+                rank_list_prev = cm._read_all_rank_lists()
+                rank_list_prev = cm._preprocess_df(rank_list_prev)
+                rank_list_prev_sparse = cm._rank_list_to_sparse(rank_list_prev)
+                # most_common_cols = rank_list_prev_sparse.sum().sort_values(ascending=False)[:10].index.values
+                columns_greater_than = rank_list_prev_sparse.columns[rank_list_prev_sparse.sum() > 80]
+                columns_smaller_than = rank_list_prev_sparse.columns[rank_list_prev_sparse.sum() < 80]
+
+                dims_to_avoid = [int(elm.split('_')[1]) for elm in columns_greater_than]    
+                dims_to_prefer = [int(elm.split('_')[1]) for elm in columns_smaller_than]    
+
+                df = cm._preprocess_df(df)
+                idx_drop = df[df['A'].isin(dims_to_avoid)].index
+                df.drop(idx_drop, inplace=True)
+                idx_drop = df[df['B'].isin(dims_to_avoid)].index
+                df.drop(idx_drop, inplace=True)
+                idx_drop = df[df['C'].isin(dims_to_avoid)].index
+                df.drop(idx_drop, inplace=True)
+                print('After:',df.shape)            
+
+            '''similarity matrix'''
+            # if cut_round>=10:
+            #     # sim_matrix, df = cm._similarity_matrix(df, df_sparse)
+            #     # df.sort_values(by='similarity', ascending=False, inplace=True)
+            #     # df = df[:1000]
+            #     # rank_list = cm._simple_sorting(df, _rank_list)
+            #     rank_list =  cm._simple_kmodes(df, _rank_list)
+            #     cm._save_pickle_ranklist(rank_list, cut_round)
+            #     return rank_list
 
             # rank_list = cm._simple_sorting(df, _rank_list)
-            rank_list = cm._simple_kmeans(df, df_sparse, _rank_list)
-            # rank_list = cm._simple_kmodes(df, _rank_list)
-            # rank_list = cm._dbscan(df, df_sparse, _rank_list)
-            
+            # rank_list = cm._simple_kmeans(df, df_sparse, _rank_list)
+            rank_list = cm._simple_kmodes(df, _rank_list)
+
+            '''rank_list to sparse matrix'''
+            # rl_sparse=cm._rank_list_to_sparse(rank_list=rank_list)
+
             # save rank_list pickle file
             print('Number of elements in rank list:', len(rank_list))
             cm._save_pickle_ranklist(rank_list, cut_round)
