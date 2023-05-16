@@ -1190,19 +1190,20 @@ class CutSolverK(object):
                         file_path = os.path.join(folder_path, filename)  # Get the full file path
                         os.remove(file_path)  # Delete the file
 
-            if cut_round > 15:
+            if cut_round > 1:
                 print('Before:',df.shape)            
                 rank_list_prev = cm._read_all_rank_lists()
                 rank_list_prev = cm._preprocess_df(rank_list_prev)
                 rank_list_prev_sparse = cm._rank_list_to_sparse(rank_list_prev)
                 # most_common_cols = rank_list_prev_sparse.sum().sort_values(ascending=False)[:10].index.values
                 columns_greater_than = rank_list_prev_sparse.columns[rank_list_prev_sparse.sum() > 80]
-                columns_smaller_than = rank_list_prev_sparse.columns[rank_list_prev_sparse.sum() < 80]
+                columns_smaller_than = rank_list_prev_sparse.columns[rank_list_prev_sparse.sum() < 25]
 
                 dims_to_avoid = [int(elm.split('_')[1]) for elm in columns_greater_than]    
                 dims_to_prefer = [int(elm.split('_')[1]) for elm in columns_smaller_than]    
 
                 df = cm._preprocess_df(df)
+
                 idx_drop = df[df['A'].isin(dims_to_avoid)].index
                 df.drop(idx_drop, inplace=True)
                 idx_drop = df[df['B'].isin(dims_to_avoid)].index
@@ -1210,6 +1211,15 @@ class CutSolverK(object):
                 idx_drop = df[df['C'].isin(dims_to_avoid)].index
                 df.drop(idx_drop, inplace=True)
                 print('After:',df.shape)            
+
+                idx_prefer = df[df['A'].isin(dims_to_prefer)].index
+                df.loc[df.index.isin(idx_prefer.values), 2] = 222
+                idx_prefer = df[df['B'].isin(idx_prefer.values)].index
+                df.loc[df.index.isin(idx_prefer.values), 2] = 222
+                idx_prefer = df[df['C'].isin(idx_prefer.values)].index
+                df.loc[df.index.isin(idx_prefer.values), 2] = 202
+                
+                print(df[2].max())
 
             '''similarity matrix'''
             # if cut_round>=10:
@@ -1221,15 +1231,15 @@ class CutSolverK(object):
             #     cm._save_pickle_ranklist(rank_list, cut_round)
             #     return rank_list
 
-            # rank_list = cm._simple_sorting(df, _rank_list)
+            rank_list = cm._simple_sorting(df, _rank_list)
             # rank_list = cm._simple_kmeans(df, df_sparse, _rank_list)
-            rank_list = cm._simple_kmodes(df, _rank_list)
+            # rank_list = cm._simple_kmodes(df, _rank_list)
 
             '''rank_list to sparse matrix'''
             # rl_sparse=cm._rank_list_to_sparse(rank_list=rank_list)
 
             # save rank_list pickle file
-            print('Number of elements in rank list:', len(rank_list))
+            print(' ****** Number of elements in rank list:', len(rank_list),'********')
             cm._save_pickle_ranklist(rank_list, cut_round)
 
         return rank_list
