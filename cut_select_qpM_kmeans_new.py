@@ -1182,6 +1182,7 @@ class CutSolverK(object):
 
             '''load data from previous round'''
             if cut_round==1:
+                # delete all pickle files from previous runs
                 folder_path = 'temp_files/'  # Replace with the path to your folder containing pickle files
 
                 # Iterate over files in the folder
@@ -1190,38 +1191,46 @@ class CutSolverK(object):
                         file_path = os.path.join(folder_path, filename)  # Get the full file path
                         os.remove(file_path)  # Delete the file
 
-            if cut_round > 1:
-                print('Before:',df.shape)            
+            if cut_round > 6:
+                print('Before:', df.shape)            
                 rank_list_prev = cm._read_all_rank_lists()
-                rank_list_prev = cm._preprocess_df(rank_list_prev)
-                rank_list_prev_sparse = cm._rank_list_to_sparse(rank_list_prev)
-                # most_common_cols = rank_list_prev_sparse.sum().sort_values(ascending=False)[:10].index.values
-                columns_greater_than = rank_list_prev_sparse.columns[rank_list_prev_sparse.sum() > 80]
-                columns_smaller_than = rank_list_prev_sparse.columns[rank_list_prev_sparse.sum() < 25]
+                # rank_list_prev = cm._preprocess_df(rank_list_prev)
+                # rank_list_prev_sparse = cm._rank_list_to_sparse(rank_list_prev)
+                df, selected_triplets = cm._previously_selected_triplets(df, rank_list_prev)
 
-                dims_to_avoid = [int(elm.split('_')[1]) for elm in columns_greater_than]    
-                dims_to_prefer = [int(elm.split('_')[1]) for elm in columns_smaller_than]    
-
-                df = cm._preprocess_df(df)
-
-                idx_drop = df[df['A'].isin(dims_to_avoid)].index
-                df.drop(idx_drop, inplace=True)
-                idx_drop = df[df['B'].isin(dims_to_avoid)].index
-                df.drop(idx_drop, inplace=True)
-                idx_drop = df[df['C'].isin(dims_to_avoid)].index
-                df.drop(idx_drop, inplace=True)
-                print('After:',df.shape)            
-
-                idx_prefer = df[df['A'].isin(dims_to_prefer)].index
-                df.loc[df.index.isin(idx_prefer.values), 2] = 222
-                idx_prefer = df[df['B'].isin(idx_prefer.values)].index
-                df.loc[df.index.isin(idx_prefer.values), 2] = 222
-                idx_prefer = df[df['C'].isin(idx_prefer.values)].index
-                df.loc[df.index.isin(idx_prefer.values), 2] = 202
+                '''weight based on times a triplet is selected'''
+                selected_rows = df['prev_selected'] <= 1
+                df.loc[selected_rows, 2] = df.loc[selected_rows, 2] * 5
+                
+                
+                '''not good idea
+                :columns_greater_than = rank_list_prev_sparse.columns[rank_list_prev_sparse.sum() > 60]
+                :columns_smaller_than = rank_list_prev_sparse.columns[rank_list_prev_sparse.sum() < 50]
+                :
+                :dims_to_avoid = [int(elm.split('_')[1]) for elm in columns_greater_than]    
+                :dims_to_prefer = [int(elm.split('_')[1]) for elm in columns_smaller_than]    
+                :
+                :df = cm._preprocess_df(df)
+                :   
+                :idx_drop = df[df['A'].isin(dims_to_avoid)].index
+                :df.drop(idx_drop, inplace=True)
+                :idx_drop = df[df['B'].isin(dims_to_avoid)].index
+                :df.drop(idx_drop, inplace=True)
+                :idx_drop = df[df['C'].isin(dims_to_avoid)].index
+                :df.drop(idx_drop, inplace=True)
+                :print('After:', df.shape)            
+                :
+                :idx_prefer = df[df['A'].isin(dims_to_prefer)].index
+                :df.loc[df.index.isin(idx_prefer.values), 2] = 10
+                :idx_prefer = df[df['B'].isin(idx_prefer.values)].index
+                :df.loc[df.index.isin(idx_prefer.values), 2] = 10
+                :idx_prefer = df[df['C'].isin(idx_prefer.values)].index
+                :df.loc[df.index.isin(idx_prefer.values), 2] = 10
                 
                 print(df[2].max())
+                '''
 
-            '''similarity matrix'''
+            '''similarity matrix
             # if cut_round>=10:
             #     # sim_matrix, df = cm._similarity_matrix(df, df_sparse)
             #     # df.sort_values(by='similarity', ascending=False, inplace=True)
@@ -1230,11 +1239,14 @@ class CutSolverK(object):
             #     rank_list =  cm._simple_kmodes(df, _rank_list)
             #     cm._save_pickle_ranklist(rank_list, cut_round)
             #     return rank_list
+            '''
 
-            rank_list = cm._simple_sorting(df, _rank_list)
+            '''main selection method'''
+            # rank_list = cm._simple_sorting(df, _rank_list)
             # rank_list = cm._simple_kmeans(df, df_sparse, _rank_list)
-            # rank_list = cm._simple_kmodes(df, _rank_list)
-
+            rank_list = cm._simple_kmodes(df, _rank_list)
+            # rank_list = cm._random_selection(df, _rank_list)
+            
             '''rank_list to sparse matrix'''
             # rl_sparse=cm._rank_list_to_sparse(rank_list=rank_list)
 

@@ -16,6 +16,7 @@ from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
 from kmodes.kmodes import KModes
 from sklearn.decomposition import TruncatedSVD
 import gower
+import random
 
 ''' Define constants'''
 N_CLUSTERS = 100
@@ -43,6 +44,13 @@ def _read_data(cut_round):
 def _preprocess_df(df):
     df[['A', 'B', 'C']] = df[1].apply(lambda x: pd.Series(x))
     return df
+
+def _random_selection(df, _rank_list):
+    print(df.shape)
+    cuts_idx = [random.randint(0, len(df)-1) for _ in range(100)]
+    rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
+    return rank_list
+
 
 def _simple_sorting(df, _rank_list):
     print(df.shape)
@@ -156,10 +164,28 @@ def _read_rank_list(filename):
 def _read_all_rank_lists():
     # Get all CSV files in the folder starting with "rank"
     pickle_files = glob.glob("temp_files/rank_list_*.pickle")
-    dfs = []
-    for f in pickle_files:
-        temp_rl = _read_rank_list(f)
-        dfs.append(temp_rl)
-
-    rank_list = pd.concat(dfs)
+    # Concatenate all DataFrames into a single DataFrame
+    rank_list = pd.concat(_read_rank_list(f) for f in pickle_files)
+    rank_list.reset_index(inplace=True, drop=True)
+    rank_list['cut_round'] = (rank_list.index // 100) + 1 
     return rank_list
+
+def _previously_selected_triplets(df, rank_list):
+    unique_tripltes = pd.DataFrame(rank_list[1].astype(str).value_counts()).reset_index()
+    unique_tripltes.rename(columns={1: 'count', 'index':'triplet'}, inplace=True)
+    rounds = []
+    for row in range(len(unique_tripltes)):
+        triplet = str(unique_tripltes['triplet'].iloc[row])
+        rounds.append(rank_list[rank_list[1].astype(str)==triplet]['cut_round'].values)
+        
+    unique_tripltes['rounds']=rounds
+
+
+    df['prev_selected'] = df[1].astype(str).isin(unique_tripltes['triplet'].astype(str)).astype(int)
+
+    selected_rows = df['prev_selected'] == 1
+    triplets = df.loc[selected_rows, 1].astype(str)
+    matching_counts = unique_tripltes.loc[unique_tripltes['triplet'].astype(str).isin(triplets), 'count'].values
+    df.loc[selected_rows, 'prev_selected'] = df.loc[selected_rows, 'prev_selected'] * matching_counts
+    
+    return df, unique_tripltes
