@@ -51,7 +51,6 @@ def _random_selection(df, _rank_list):
     rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
     return rank_list
 
-
 def _simple_sorting(df, _rank_list):
     print(df.shape)
     df.sort_values(by=2, ascending=False, inplace=True)
@@ -73,21 +72,45 @@ def _simple_kmeans(df, df_sparse, _rank_list, n_clusters=N_CLUSTERS):
     rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
     return rank_list
 
-def _simple_kmodes(df, _rank_list, n_clusters=N_CLUSTERS):
-    df=_preprocess_df(df)
+def _simple_kmodes(df, _rank_list, cut_round, n_clusters=N_CLUSTERS):
+    file_path = 'temp_files/kmodes.pickle'
+    if cut_round < 12:
+        df=_preprocess_df(df)
+        # print shape of dataset
+        print('Dataset shape:', df.shape)
+        kmodes=KModes(n_clusters=N_CLUSTERS)
+        df['cluster']=kmodes.fit_predict(df[['A','B','C',2,5]])
 
-    # print shape of dataset
-    print('Dataset shape:', df.shape)
-    kmodes=KModes(n_clusters=N_CLUSTERS)
-    df['cluster']=kmodes.fit_predict(df[['A','B','C',2,5]])
+        n_elements = int(100/n_clusters)
+        SELECTED_CUTS = [df[df['cluster'] == cls].sort_values(by=2, ascending=False).index[:n_elements].values for cls in range(n_clusters)]
+        SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+        cuts_idx = SELECTED_CUTS
+        rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
+        if cut_round == 10:
+            # Open the file in write mode
+            with open(file_path, 'wb') as file:
+                # Use pickle.dump() to write the model object to the file
+                pickle.dump(kmodes, file)
+            print("Model saved...")
+    else:
+        print('Using trained model...')
+        df=_preprocess_df(df)
+        # print shape of dataset
+        print('Dataset shape:', df.shape)
+        # Open the file in read mode
+        with open(file_path, 'rb') as file:
+            # Use pickle.load() to load the model object from the file
+            kmodes = pickle.load(file)
 
-    n_elements = int(100/n_clusters)
-    SELECTED_CUTS = [df[df['cluster'] == cls].sort_values(by=2, ascending=False).index[:n_elements].values for cls in range(n_clusters)]
-    SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
-    cuts_idx = SELECTED_CUTS
-    rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
-
+        df['cluster']=kmodes.predict(df[['A','B','C',2,5]])
+        n_elements = int(100/n_clusters)
+        SELECTED_CUTS = [df[df['cluster'] == cls].sort_values(by=2, ascending=False).index[:n_elements].values for cls in range(n_clusters)]
+        SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+        cuts_idx = SELECTED_CUTS
+        rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
     return rank_list
+
+
 
 def _train_dec_tree(df, df_sparse, cut_round):
     

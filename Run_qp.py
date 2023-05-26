@@ -19,6 +19,10 @@ import itertools
 import os
 from timeit import default_timer as timer 
 
+import time
+
+start_time = time.time()
+
 # Define paremeters
 sel_size=100 # number of selected cuts
 dim=3 # dimension of low dimensional cuts, only triplets used
@@ -33,6 +37,7 @@ csK=CutSolverK()
 strat = 1  #1= feasibility, 2= optimality, 4=combined, 5= random
 strategies = {1: 'feasibility', 2: 'optimality'}
 
+
 for filename in boxqpinst : # iterate over boxqp instances
   for n_clusters in  [100]: 
       print('The filename is', filename, 'The strategy is', strat)
@@ -43,7 +48,8 @@ for filename in boxqpinst : # iterate over boxqp instances
         strat=strat, nb_rounds_cuts=cut_rounds,term_on=termon)
         
       print ('Final solution is', solK[-1], 'The new time elapsed is', timeK, 'The cut rounds are',len(nbs_sdp_cutsK)-1)
-  
+
+
 # save to csv file at the end
 results={'Solution': solK,'Time': timeK}
 df = pd.DataFrame(results)
@@ -51,3 +57,7 @@ df = pd.DataFrame(results)
 os.chdir('C:/Users/mexis/OneDrive/Υπολογιστής/SDPCutSel/Results/')
 File_name='Kmeans ' + strategies[strat] + ' ' + str(n_clusters) + ' clusters.csv'
 df.to_csv(File_name, header='column_names',index=False)
+
+end_time = time.time()
+
+print('Elapsed time in seconds:', end_time-start_time)
