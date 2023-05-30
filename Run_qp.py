@@ -12,13 +12,13 @@
 '''
 print(__doc__)
 
-from cut_select_qpM_kmeans_new import CutSolverK # import solver class
+# from cut_select_qpM_kmeans_new import CutSolverK # import solver class
+from Temporal import CutSolverK
 import numpy as np 
 import pandas as pd
 import itertools
 import os
 from timeit import default_timer as timer 
-
 import time
 
 start_time = time.time()
@@ -44,7 +44,7 @@ for filename in boxqpinst : # iterate over boxqp instances
       print('The number of clusters is', n_clusters)
 
       (solK, timeK, round_times, sep_times, nbs_sdp_cutsK, nbs_tri_cuts, vars_values, agg_list) = \
-       csK.cut_select_algo(filename=filename, dim=dim, sel_size=sel_size, \
+       csK.cut_select_algo(variation=3, n_clusters=n_clusters, filename=filename, dim=dim, sel_size=sel_size, \
         strat=strat, nb_rounds_cuts=cut_rounds,term_on=termon)
         
       print ('Final solution is', solK[-1], 'The new time elapsed is', timeK, 'The cut rounds are',len(nbs_sdp_cutsK)-1)
