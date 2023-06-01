@@ -72,9 +72,9 @@ def _simple_kmeans(df, df_sparse, _rank_list, n_clusters=N_CLUSTERS):
     rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
     return rank_list
 
-def _simple_kmodes(df, _rank_list, cut_round, n_clusters=N_CLUSTERS):
+def _simple_kmodes(df, _rank_list, cut_round, n_clusters=N_CLUSTERS, last_round=1000):
     file_path = 'temp_files/kmodes.pickle'
-    if cut_round < 12:
+    if cut_round < last_round:
         df=_preprocess_df(df)
         # print shape of dataset
         print('Dataset shape:', df.shape)
@@ -86,7 +86,7 @@ def _simple_kmodes(df, _rank_list, cut_round, n_clusters=N_CLUSTERS):
         SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
         cuts_idx = SELECTED_CUTS
         rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
-        if cut_round == 10:
+        if cut_round == 1000:
             # Open the file in write mode
             with open(file_path, 'wb') as file:
                 # Use pickle.dump() to write the model object to the file
@@ -109,8 +109,6 @@ def _simple_kmodes(df, _rank_list, cut_round, n_clusters=N_CLUSTERS):
         cuts_idx = SELECTED_CUTS
         rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
     return rank_list
-
-
 
 def _train_dec_tree(df, df_sparse, cut_round):
     
@@ -212,3 +210,71 @@ def _previously_selected_triplets(df, rank_list):
     df.loc[selected_rows, 'prev_selected'] = df.loc[selected_rows, 'prev_selected'] * matching_counts
     
     return df, unique_tripltes
+
+def _jaccard_similarity(set_a, set_b):
+    intersection = len(set_a.intersection(set_b))
+    union = len(set_a.union(set_b))
+    return intersection / union
+
+# 1 means complete similar (the same)
+def _compute_similarity(df, rank_list):
+    cuts_a = df[1].values
+    cuts_b = rank_list[1].values
+
+    average_similarities = []
+
+    for element in cuts_a:
+        set_a = set(element)
+        element_similarities = []
+        
+        for other_element in cuts_b:
+            set_b = set(other_element)
+            similarity = _jaccard_similarity(set_a, set_b)
+            element_similarities.append(similarity)
+        
+        average_similarity = sum(element_similarities) / len(element_similarities)
+        average_similarities.append(average_similarity)
+
+    df['avg_similarity'] = average_similarities
+
+    return df
+
+def _memory_kmodes(df, _rank_list, n_clusters=N_CLUSTERS):
+    df=_preprocess_df(df)
+    
+    # print shape of dataset
+    print('Dataset shape:', df.shape)
+    kmodes=KModes(n_clusters=N_CLUSTERS)
+    df['cluster']=kmodes.fit_predict(df[['A','B','C',2,5]])
+
+    n_elements = int(100/n_clusters) * 10
+    SELECTED_CUTS = [df[df['cluster'] == cls].sort_values(by=2, ascending=False).index[:n_elements].values for cls in range(n_clusters)]
+    selected_indices = np.concatenate(SELECTED_CUTS)
+    df = df.iloc[selected_indices]   
+
+    cuts_idx = df.sort_values(by='avg_similarity', ascending=True).head(100).index
+    rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
+    return rank_list
+
+
+def _similarity_measure(df, rank_list):
+    rank_list_sparse= _rank_list_to_sparse(rank_list)
+    dims = rank_list_sparse.sum().sort_values(ascending=False).index
+    dims=pd.DataFrame(dims)
+    dims[0]=dims[0].apply(lambda x: int(x.split('_')[1]))
+
+    elements = []
+    for row in range(len(df)):
+        count = 0
+        for d in dims[0][:10].values:
+            if d in df[1].iloc[row]:
+                count+=1
+        elements.append(count)
+
+    df['times'] = elements
+
+    return df
+
+
+
+

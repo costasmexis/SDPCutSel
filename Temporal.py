@@ -1108,7 +1108,7 @@ class CutSolverK(object):
         """Dynamic Method: with keep_list of used triplets ( 2 common elements )
            Remove from rank_list_cluster elements that are already on the keep_list (twice) and 
            replace them with random element from rest of list""" 
-
+        
         population=[]
         n,nb_lifted, agg_list, Q, get_eigendecomp =self._nb_vars, self._nb_lifted, self._agg_list, self._Q, self._get_eigendecomp
         keep_list= self.keep_list
@@ -1145,12 +1145,6 @@ class CutSolverK(object):
             pop_kmeans=np.asarray(population) 
             kmeans=KMeans(n_clusters= n_clusters, random_state=67 ).fit(pop_kmeans)
             labels=kmeans.labels_        
-            #inertia=kmeans.inertia_
-            #print('the inertia is', inertia)         
-            #count_dupl=dict(Counter(labels))
-            #print("count_dupl is:",count_dupl)
-            #print("labels is:", labels)
-
 
             rank_list_new=[] 
             for cluster in range(n_clusters):
@@ -1179,11 +1173,9 @@ class CutSolverK(object):
                         rank_list_new.append(rank_list_cluster[i])
                         keep_list.append(rank_list_cluster[i][1])
                         break
-            
             rank_list_new.sort(key=itemgetter(2), reverse=True) #system is sensitive to sorting the rank_list even thought all of it transforms to linear constrains
             self.keep_list=keep_list
             print("\n len of keep_list is: ",len(keep_list))
-
             return rank_list_new
 
     def _Temporal_4(self, strat, vars_values, cut_round,filename, sel_size,n_clusters) : 
@@ -1620,3 +1612,83 @@ class CutSolverK(object):
             print("\n len of keep_list is: ",len(keep_list))
             
         return rank_list_new
+    
+'''
+backup savbed
+    def _Temporal_3(self, strat, vars_values, cut_round,filename, sel_size,n_clusters) :
+        
+        """Dynamic Method: with keep_list of used triplets ( 2 common elements )
+           Remove from rank_list_cluster elements that are already on the keep_list (twice) and 
+           replace them with random element from rest of list""" 
+        
+        population=[]
+        n,nb_lifted, agg_list, Q, get_eigendecomp =self._nb_vars, self._nb_lifted, self._agg_list, self._Q, self._get_eigendecomp
+        keep_list= self.keep_list
+        print(keep_list)
+        #To vars_values prokuptei apo thn epilush tou susthmatos se kathe guro (my_prob.solve())
+        X_vals, x_vals = list(vars_values[0:nb_lifted]), list(vars_values[nb_lifted:])
+        rank_list = [0] * len(agg_list)
+        # Guard for selection size
+        sel_size = min(sel_size, len(agg_list))
+        #print("sel_size is", sel_size)
+        feas_sel, opt_sel, exact_sel, comb_sel, rand_sel, figure_8 = \
+            (strat == 1), (strat == 2), (strat == 3), (strat == 4), (strat == 5), (strat == -1)
+
+        if feas_sel:
+            get_eigendecomp = self._get_eigendecomp
+            nb_violated = 0
+            # Rank by eigenvalues (when negative)
+            # print('I am now running feas selection', cut_round)
+            aggidx_viol=[] # agg_idx  meomory for violated cuts 
+            for agg_idx, (set_inds, Xarr_inds, _, _) in enumerate(agg_list):
+                x_pop=[0]*(n)
+                dim_act = len(set_inds)
+                curr_pt = itemgetter(*set_inds)(x_vals)
+                X_slice = itemgetter(*Xarr_inds)(X_vals) #m after this point I could introduce my idea and I would have to check all instances
+                eigval = get_eigendecomp(dim_act, curr_pt, X_slice, False)[0] #mia idiotimh => ena eigvec gia kathe 3D subproblem (h pio arnhtikh/ mikroterh)
+                if eigval < CutSolverK._THRES_NEG_EIGVAL: # apply clustering only if I have a feasibility violation
+                    rank_list[agg_idx] = (agg_idx, set_inds, -eigval,curr_pt, Xarr_inds, dim_act)#added agg_idx
+                    aggidx_viol.append(agg_idx)
+                    for i in range(len(set_inds)):
+                        x_pop[set_inds[i]]=curr_pt[i]                                                
+                    population.append(x_pop)  
+                    nb_violated += 1
+            print("nb_violated is: ", nb_violated) #=len(population)
+
+            pop_kmeans=np.asarray(population) 
+            kmeans=KMeans(n_clusters= n_clusters, random_state=67 ).fit(pop_kmeans)
+            labels=kmeans.labels_        
+
+            rank_list_new=[] 
+            for cluster in range(n_clusters):
+                rank_list_cluster=[] #rank list for cluster's elements
+                for element in range(len(population)):
+                    if labels[element]==cluster:
+                        hold=aggidx_viol[element]
+                        rank_list_cluster.append(rank_list[hold])
+                #max(rank_list_cluster, key=lambda x: x[2]) returns info of the subprob with the max -eigenvalue within a cluster/ first element is agg_ind        
+                rank_list_cluster.sort(key=lambda x: x[2],  reverse=True)
+
+                for i in range(len(rank_list_cluster)):
+                    count_doubles=0
+                    r=rank_list_cluster[i][1]
+                    #print("keep_list is \n",keep_list,"\n",r)
+                    for j in range(len(keep_list)):
+                        k=keep_list[j]
+                        if (r[0] in k and r[1] in k or r[0] in k and r[2] in k or r[1] in k and r[2] in k) :
+                            #print("duplicate triplet found\n",r,"\n",k)
+                            count_doubles +=1
+                    #print("count_doubles for element ",i ,"of cluster", cluster,"is:",count_doubles)
+                    #if count_doubles <= 2 and cut_round <=6 or count_doubles<= (cut_round+1) and cut_round>6:    ###### cut off element from 3 times in keep_list and up
+                    #if count_doubles <= 2 and cut_round <=5 or count_doubles<= (cut_round) and cut_round>5:   #prepei na vrw thn optimum tolerance
+                    if count_doubles <= 2 and cut_round <=6 or count_doubles<= 3 and cut_round>6 and cut_round<= 11 or count_doubles<= 4 and cut_round>11 and cut_round <=17 or count_doubles<= 6 and cut_round>17 : 
+                    #cut off 3+ for cut_round <= 6 and cut off 4+ for 6<cut_round<=11 and cut off 5+ for 11<cut_round<=18 and cut off 6+ for cut_round>18)
+                        rank_list_new.append(rank_list_cluster[i])
+                        keep_list.append(rank_list_cluster[i][1])
+                        break
+            rank_list_new.sort(key=itemgetter(2), reverse=True) #system is sensitive to sorting the rank_list even thought all of it transforms to linear constrains
+            self.keep_list=keep_list
+            print("\n len of keep_list is: ",len(keep_list))
+            return rank_list_new
+
+'''

@@ -1176,33 +1176,39 @@ class CutSolverK(object):
                     population.append(x_pop)       
                     nb_violated += 1
 
+            
+            '''
+            ***************
+            ***************
+            '''
+
+            '''load data from previous round'''
+            if cut_round==1:
+                # delete all files from previous runs
+                folder_path = 'temp_files/'  # Replace with the path to your folder containing pickle files
+                files = os.listdir(folder_path)
+
+                for file_name in files:
+                    file_path = os.path.join(folder_path, file_name)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+
+
             df = pd.DataFrame(df_rank_list_new) # main compact data
             df_sparse = pd.DataFrame(population) # main sparse data
             cm._save_data_csv(df,df_sparse,cut_round) # save data of every round
 
-            # '''load data from previous round'''
-            # if cut_round==1:
-            #     # delete all pickle files from previous runs
-            #     folder_path = 'temp_files/'  # Replace with the path to your folder containing pickle files
+            r = 100
+            if cut_round >= r:
+                print('Option B...')
+                filename = 'temp_files/rank_list_{}.pickle'.format(cut_round-1)
+                rank_list_prev = cm._read_rank_list(filename)
+                # rank_list_prev = cm._preprocess_df(rank_list_prev)
 
-            #     # Iterate over files in the folder
-            #     for filename in os.listdir(folder_path):
-            #         if filename.endswith(".pickle"):  # Check if the file has a .pickle extension
-            #             file_path = os.path.join(folder_path, filename)  # Get the full file path
-            #             os.remove(file_path)  # Delete the file
+                df = cm._compute_similarity(df, rank_list_prev)
+                rank_list = cm._memory_kmodes(df, _rank_list)
+                rank_list.sort(key=itemgetter(2), reverse=True) #system is sensitive to sorting the rank_list even thought all of it transforms to linear constrains
 
-            # if cut_round > 12:
-            #     print('Before:', df.shape)            
-            #     rank_list_prev = cm._read_all_rank_lists()
-            #     # rank_list_prev = cm._preprocess_df(rank_list_prev)
-            #     # rank_list_prev_sparse = cm._rank_list_to_sparse(rank_list_prev)
-            #     df, selected_triplets = cm._previously_selected_triplets(df, rank_list_prev)
-
-            #     '''weight based on times a triplet is selected'''
-            #     selected_rows = df['prev_selected'] <= 1
-            #     df.loc[selected_rows, 2] = df.loc[selected_rows, 2] + 999
-                
-                
             '''similarity matrix
             # if cut_round>=10:
             #     # sim_matrix, df = cm._similarity_matrix(df, df_sparse)
@@ -1217,7 +1223,10 @@ class CutSolverK(object):
             '''main selection method'''
             # rank_list = cm._simple_sorting(df, _rank_list)
             # rank_list = cm._simple_kmeans(df, df_sparse, _rank_list)
-            rank_list = cm._simple_kmodes(df, _rank_list, cut_round)
+            if cut_round < r:
+                print('Option A...')
+                rank_list = cm._simple_kmodes(df, _rank_list, cut_round)
+                rank_list.sort(key=itemgetter(2), reverse=True) #system is sensitive to sorting the rank_list even thought all of it transforms to linear constrains
             # rank_list = cm._random_selection(df, _rank_list)
             
             '''rank_list to sparse matrix'''
@@ -1225,6 +1234,6 @@ class CutSolverK(object):
 
             # save rank_list pickle file
             print(' ****** Number of elements in rank list:', len(rank_list),'********')
-            # cm._save_pickle_ranklist(rank_list, cut_round)
+            cm._save_pickle_ranklist(rank_list, cut_round)
 
         return rank_list
