@@ -1198,42 +1198,31 @@ class CutSolverK(object):
             df_sparse = pd.DataFrame(population) # main sparse data
             cm._save_data_csv(df,df_sparse,cut_round) # save data of every round
 
-            r = 100
-            if cut_round >= r:
-                print('Option B...')
-                filename = 'temp_files/rank_list_{}.pickle'.format(cut_round-1)
-                rank_list_prev = cm._read_rank_list(filename)
-                # rank_list_prev = cm._preprocess_df(rank_list_prev)
-
-                df = cm._compute_similarity(df, rank_list_prev)
-                rank_list = cm._memory_kmodes(df, _rank_list)
-                rank_list.sort(key=itemgetter(2), reverse=True) #system is sensitive to sorting the rank_list even thought all of it transforms to linear constrains
-
-            '''similarity matrix
-            # if cut_round>=10:
-            #     # sim_matrix, df = cm._similarity_matrix(df, df_sparse)
-            #     # df.sort_values(by='similarity', ascending=False, inplace=True)
-            #     # df = df[:1000]
-            #     # rank_list = cm._simple_sorting(df, _rank_list)
-            #     rank_list =  cm._simple_kmodes(df, _rank_list)
-            #     cm._save_pickle_ranklist(rank_list, cut_round)
-            #     return rank_list
-            '''
-
+            r = 6
             '''main selection method'''
-            # rank_list = cm._simple_sorting(df, _rank_list)
-            # rank_list = cm._simple_kmeans(df, df_sparse, _rank_list)
-            if cut_round < r:
+            if cut_round <= r:
                 print('Option A...')
-                rank_list = cm._simple_kmodes(df, _rank_list, cut_round)
-                rank_list.sort(key=itemgetter(2), reverse=True) #system is sensitive to sorting the rank_list even thought all of it transforms to linear constrains
-            # rank_list = cm._random_selection(df, _rank_list)
-            
-            '''rank_list to sparse matrix'''
-            # rl_sparse=cm._rank_list_to_sparse(rank_list=rank_list)
+                rank_list = cm._simple_kmodes(df, _rank_list, cut_round, last_round=226)
+                # rank_list = cm._simple_sorting(df, _rank_list)
+                # rank_list = cm._simple_kmeans(df, df_sparse, _rank_list)
+                # rank_list = cm._random_selection(df, _rank_list)
+            else:
+                print('Option B...')
+                df, _ = cm._previously_selected_triplets(df)
+
+                if cut_round <= 12:
+                    idx_drop = df[df['prev_selected']==3].index
+                    df.drop(idx_drop,inplace=True)
+                else:
+                    idx_drop = df[df['prev_selected']>=2].index
+                    df.drop(idx_drop, inplace=True)
+                rank_list = cm._simple_kmodes(df, _rank_list, cut_round, last_round=226)
+
+                # rank_list = cm._memory_kmodes(df, _rank_list)
 
             # save rank_list pickle file
             print(' ****** Number of elements in rank list:', len(rank_list),'********')
+            # rank_list.sort(key=itemgetter(2), reverse=True) #system is sensitive to sorting the rank_list even thought all of it transforms to linear constrains
             cm._save_pickle_ranklist(rank_list, cut_round)
 
         return rank_list

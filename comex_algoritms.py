@@ -74,7 +74,7 @@ def _simple_kmeans(df, df_sparse, _rank_list, n_clusters=N_CLUSTERS):
 
 def _simple_kmodes(df, _rank_list, cut_round, n_clusters=N_CLUSTERS, last_round=1000):
     file_path = 'temp_files/kmodes.pickle'
-    if cut_round < last_round:
+    if cut_round <= last_round:
         df=_preprocess_df(df)
         # print shape of dataset
         print('Dataset shape:', df.shape)
@@ -86,7 +86,7 @@ def _simple_kmodes(df, _rank_list, cut_round, n_clusters=N_CLUSTERS, last_round=
         SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
         cuts_idx = SELECTED_CUTS
         rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
-        if cut_round == 1000:
+        if cut_round == last_round:
             # Open the file in write mode
             with open(file_path, 'wb') as file:
                 # Use pickle.dump() to write the model object to the file
@@ -191,25 +191,25 @@ def _read_all_rank_lists():
     rank_list['cut_round'] = (rank_list.index // 100) + 1 
     return rank_list
 
-def _previously_selected_triplets(df, rank_list):
-    unique_tripltes = pd.DataFrame(rank_list[1].astype(str).value_counts()).reset_index()
-    unique_tripltes.rename(columns={1: 'count', 'index':'triplet'}, inplace=True)
+def _previously_selected_triplets(df):
+    rank_list = _read_all_rank_lists()
+    unique_triplets = pd.DataFrame(rank_list[1].astype(str).value_counts()).reset_index()
+    unique_triplets.rename(columns={1: 'count', 'index':'triplet'}, inplace=True)
     rounds = []
-    for row in range(len(unique_tripltes)):
-        triplet = str(unique_tripltes['triplet'].iloc[row])
+    for row in range(len(unique_triplets)):
+        triplet = str(unique_triplets['triplet'].iloc[row])
         rounds.append(rank_list[rank_list[1].astype(str)==triplet]['cut_round'].values)
         
-    unique_tripltes['rounds']=rounds
+    unique_triplets['rounds']=rounds
 
-
-    df['prev_selected'] = df[1].astype(str).isin(unique_tripltes['triplet'].astype(str)).astype(int)
+    df['prev_selected'] = df[1].astype(str).isin(unique_triplets['triplet'].astype(str)).astype(int)
 
     selected_rows = df['prev_selected'] == 1
     triplets = df.loc[selected_rows, 1].astype(str)
-    matching_counts = unique_tripltes.loc[unique_tripltes['triplet'].astype(str).isin(triplets), 'count'].values
+    matching_counts = unique_triplets.loc[unique_triplets['triplet'].astype(str).isin(triplets), 'count'].values
     df.loc[selected_rows, 'prev_selected'] = df.loc[selected_rows, 'prev_selected'] * matching_counts
     
-    return df, unique_tripltes
+    return df, unique_triplets
 
 def _jaccard_similarity(set_a, set_b):
     intersection = len(set_a.intersection(set_b))
