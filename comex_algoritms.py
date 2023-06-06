@@ -134,7 +134,7 @@ def _train_dec_tree(df, df_sparse, cut_round):
 
 def _create_sparse_df(df):
     # # ***** create sparse one-hot encoded dataset *******
-    X = pd.DataFrame(0, index=range(df.shape[0]), columns=['col_{}'.format(i) for i in range(100)])
+    X = pd.DataFrame(0, index=range(df.shape[0]), columns=['col_{}'.format(i) for i in range(df.shape[1])])
 
     def set_values(row):
         A = row['A']
@@ -208,7 +208,6 @@ def _previously_selected_triplets(df):
     triplets = df.loc[selected_rows, 1].astype(str)
     matching_counts = unique_triplets.loc[unique_triplets['triplet'].astype(str).isin(triplets), 'count'].values
     df.loc[selected_rows, 'prev_selected'] = df.loc[selected_rows, 'prev_selected'] * matching_counts
-    
     return df, unique_triplets
 
 def _jaccard_similarity(set_a, set_b):
@@ -241,19 +240,17 @@ def _compute_similarity(df, rank_list):
 
 def _memory_kmodes(df, _rank_list, n_clusters=N_CLUSTERS):
     df=_preprocess_df(df)
-    
     # print shape of dataset
     print('Dataset shape:', df.shape)
     kmodes=KModes(n_clusters=N_CLUSTERS)
-    df['cluster']=kmodes.fit_predict(df[['A','B','C',2,5]])
+    df['cluster']=kmodes.fit_predict(df[['A','B','C',2,5,'prev_selected']])
 
-    n_elements = int(100/n_clusters) * 10
+    n_elements = int(100/n_clusters)
     SELECTED_CUTS = [df[df['cluster'] == cls].sort_values(by=2, ascending=False).index[:n_elements].values for cls in range(n_clusters)]
-    selected_indices = np.concatenate(SELECTED_CUTS)
-    df = df.iloc[selected_indices]   
-
-    cuts_idx = df.sort_values(by='avg_similarity', ascending=True).head(100).index
+    SELECTED_CUTS = [sublst for arr in SELECTED_CUTS for sublst in arr]
+    cuts_idx = SELECTED_CUTS
     rank_list = [_rank_list[i] for i in cuts_idx] # return element list based on their cuts
+
     return rank_list
 
 

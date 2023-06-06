@@ -1168,7 +1168,7 @@ class CutSolverK(object):
                 if eigval < CutSolverK._THRES_NEG_EIGVAL: # apply clustering only if I have a feasibility violation
                     rank_list[agg_idx] = (agg_idx, set_inds, -eigval, curr_pt, Xarr_inds, dim_act)  #added agg_idx
                     rank_list_new[agg_idx] = (agg_idx, set_inds, -eigval, curr_pt, Xarr_inds, obj_improve)
-                    df_rank_list_new.append(rank_list_new[agg_idx])          
+                    df_rank_list_new.append(rank_list_new[agg_idx])  
                     aggidx_viol.append(agg_idx)
                     _rank_list.append(rank_list[agg_idx]) # comex
                     for i in range(len(set_inds)):
@@ -1196,29 +1196,19 @@ class CutSolverK(object):
 
             df = pd.DataFrame(df_rank_list_new) # main compact data
             df_sparse = pd.DataFrame(population) # main sparse data
-            cm._save_data_csv(df,df_sparse,cut_round) # save data of every round
+            # cm._save_data_csv(df,df_sparse,cut_round) # save data of every round
 
-            r = 6
-            '''main selection method'''
-            if cut_round <= r:
-                print('Option A...')
-                rank_list = cm._simple_kmodes(df, _rank_list, cut_round, last_round=226)
-                # rank_list = cm._simple_sorting(df, _rank_list)
-                # rank_list = cm._simple_kmeans(df, df_sparse, _rank_list)
-                # rank_list = cm._random_selection(df, _rank_list)
-            else:
-                print('Option B...')
-                df, _ = cm._previously_selected_triplets(df)
-
-                if cut_round <= 12:
-                    idx_drop = df[df['prev_selected']==3].index
-                    df.drop(idx_drop,inplace=True)
-                else:
-                    idx_drop = df[df['prev_selected']>=2].index
-                    df.drop(idx_drop, inplace=True)
-                rank_list = cm._simple_kmodes(df, _rank_list, cut_round, last_round=226)
-
-                # rank_list = cm._memory_kmodes(df, _rank_list)
+            # r = 2
+            # '''main selection method'''
+            # if cut_round <= r:
+            #     print('Option A...')
+            #     rank_list = cm._simple_kmodes(df, _rank_list, cut_round, last_round=226)
+            # else:
+            #     print('Option B...')
+            #     df, _ = cm._previously_selected_triplets(df)
+            #     rank_list = cm._memory_kmodes(df, _rank_list)
+            rank_list = cm._simple_kmodes(df, _rank_list, cut_round, last_round=1)
+            print(set_inds)
 
             # save rank_list pickle file
             print(' ****** Number of elements in rank list:', len(rank_list),'********')
