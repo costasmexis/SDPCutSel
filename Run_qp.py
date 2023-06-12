@@ -12,7 +12,7 @@
 '''
 print(__doc__)
 
-from cut_select_qpM_kmeans_new import CutSolverK # import solver class
+from cut_select_qpM_kmeans_MINA import CutSolverK # import solver class
 # from Temporal import CutSolverK
 import numpy as np 
 import pandas as pd
@@ -24,7 +24,7 @@ import time
 start_time = time.time()
 
 # Define paremeters
-sel_size=100 # number of selected cuts
+sel_size=200 # number of selected cuts
 dim=3 # dimension of low dimensional cuts, only triplets used
 cut_rounds=20 # iterations
 termon= False
@@ -39,7 +39,7 @@ strategies = {1: 'feasibility', 2: 'optimality'}
 
 
 for filename in boxqpinst : # iterate over boxqp instances
-  for n_clusters in  [100]: 
+  for n_clusters in  [200]: 
       print('The filename is', filename, 'The strategy is', strat)
       print('The number of clusters is', n_clusters)
 

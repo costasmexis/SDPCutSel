@@ -183,7 +183,7 @@ class CutSolverK(object):
                 if strat != -1 and strat != 4:
                     # rank_list = self._sel_eigcut_by_ordering_on_measure(strat, vars_values, cut_round)# replace this with kmeans
                     rank_list=self._kmeans_clustering3( strat, vars_values, cut_round, filename)
-                    df=pd.DataFrame(rank_list[0:100])#m 
+                    df=pd.DataFrame(rank_list[0:200])#m 
                     df_print=df_print.append(df)
                                        
                     # self._kmeans_clustering1(strat=strat, rank_list=rank_list)
@@ -1127,7 +1127,7 @@ class CutSolverK(object):
         else:
             n=100                
 
-        n_clusters=100
+        n_clusters=200
         print('the number of clusters is', n_clusters)
         n_amb=10
         population=[]
@@ -1313,27 +1313,22 @@ class CutSolverK(object):
                     rank_list_new.sort(key=itemgetter(2), reverse=True)
  
  
-            if n_clusters<100:
-                for cluster in range(n_clusters):
-                    rank_list_cluster=[] #rank lits for cluster's elements
-                    for element in range(nb_violated):
-                        if labels[element]==cluster:
-                            hold=aggidx_viol[element]
-                            rank_list_cluster.append(rank_list[hold])
-                    rank_list_cluster.sort(key=itemgetter(2), reverse=True)
-                    rank_list_new.extend(rank_list_cluster[0:n_amb])                    
+            # if n_clusters<100:
+            #     for cluster in range(n_clusters):
+            #         rank_list_cluster=[] #rank lits for cluster's elements
+            #         for element in range(nb_violated):
+            #             if labels[element]==cluster:
+            #                 hold=aggidx_viol[element]
+            #                 rank_list_cluster.append(rank_list[hold])
+            #         rank_list_cluster.sort(key=itemgetter(2), reverse=True)
+            #         rank_list_new.extend(rank_list_cluster[0:n_amb])                    
 
-            if len(rank_list_new)>100 :
-              rank_list=rank_list_new[0:100]                 
-            else:
-              rank_list=rank_list_new
+            # if len(rank_list_new)>100 :
+            #   rank_list=rank_list_new[0:100]                 
+            # else:
+            #   rank_list=rank_list_new
 
-
-            #          rank_list[agg_idx] = (set_inds, -eigval,curr_pt, Xarr_inds, dim_act)#m add curr_pt #I want to replace this
-            #         nb_violated += 1
-            #     else:
-            #         rank_list[agg_idx] = (0, 0)
-            # rank_list.sort(key=itemgetter(1), reverse=True)
-            # rank_list = rank_list[0:nb_violated]
+            rank_list = rank_list_new
+            print(len(rank_list))
         
         return rank_list

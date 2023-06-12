@@ -1196,7 +1196,7 @@ class CutSolverK(object):
 
             df = pd.DataFrame(df_rank_list_new) # main compact data
             df_sparse = pd.DataFrame(population) # main sparse data
-            # cm._save_data_csv(df,df_sparse,cut_round) # save data of every round
+            cm._save_data_csv(df,df_sparse,cut_round) # save data of every round
 
             # r = 2
             # '''main selection method'''
@@ -1207,7 +1207,7 @@ class CutSolverK(object):
             #     print('Option B...')
             #     df, _ = cm._previously_selected_triplets(df)
             #     rank_list = cm._memory_kmodes(df, _rank_list)
-            rank_list = cm._simple_kmodes(df, _rank_list, cut_round, last_round=1)
+            rank_list = cm._simple_kmodes(df, _rank_list, cut_round, last_round=100)
             print(set_inds)
 
             # save rank_list pickle file
